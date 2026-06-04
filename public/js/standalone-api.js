@@ -34,7 +34,22 @@
   const MARINE = "https://marine-api.open-meteo.com/v1/marine";
 
   const realFetch = window.fetch.bind(window);
-  const j = (url) => realFetch(url).then((r) => r.json());
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  // Open-Meteo is load-balanced: a 502/503 usually means one unhealthy node, so
+  // an immediate retry lands on a good one. Retry on 5xx/429 and network errors.
+  async function j(url, tries = 3) {
+    let lastErr;
+    for (let i = 0; i < tries; i++) {
+      try {
+        const r = await realFetch(url);
+        if (r.ok) return await r.json();
+        if (r.status >= 500 || r.status === 429) lastErr = new Error("HTTP " + r.status);
+        else return await r.json();  // 4xx: return the body (may carry an error message)
+      } catch (e) { lastErr = e; }
+      if (i < tries - 1) await sleep(500 * (i + 1));
+    }
+    throw lastErr;
+  }
 
   function units(u) {
     const imp = (u || "imperial") === "imperial";

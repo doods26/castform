@@ -24,6 +24,7 @@ import ipaddress
 import threading
 import urllib.parse
 import urllib.request
+import urllib.error
 from datetime import date, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -136,16 +137,33 @@ def cache_set(key, value, ttl):
         _cache[key] = (time.time() + ttl, value)
 
 
-def fetch_json(url, ttl=600, headers=None):
-    """GET a URL and parse JSON, with caching by URL."""
+def fetch_json(url, ttl=600, headers=None, tries=3):
+    """GET a URL and parse JSON, with caching by URL.
+
+    Open-Meteo is load-balanced, so a transient 502/503 usually means a single
+    unhealthy node — retry a couple times (also on network errors) so brief
+    blips self-heal instead of bubbling up as a failed load.
+    """
     cached = cache_get(url)
     if cached is not None:
         return cached
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, **(headers or {})})
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
-    cache_set(url, data, ttl)
-    return data
+    last_err = None
+    for i in range(tries):
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            cache_set(url, data, ttl)
+            return data
+        except urllib.error.HTTPError as e:
+            last_err = e
+            if e.code < 500 and e.code != 429:
+                raise  # 4xx: a real client error, don't retry
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+            last_err = e
+        if i < tries - 1:
+            time.sleep(0.5 * (i + 1))
+    raise last_err
 
 
 # ---------------------------------------------------------------------------
