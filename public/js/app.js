@@ -422,6 +422,101 @@ function renderHourly(f) {
 }
 
 // --- Daily ----------------------------------------------------------------
+let daysWired = false;
+
+const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+function precipNoun(code) {
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "snow";
+  if (code >= 95) return "storms";
+  if (code >= 80 && code <= 82) return "showers";
+  if (code >= 51 && code <= 57) return "drizzle";
+  if (code >= 61 && code <= 67) return "rain";
+  return "precipitation";
+}
+
+function hourLabel(hr) {
+  hr = ((hr % 24) + 24) % 24;
+  if (hr === 0) return "midnight";
+  if (hr === 12) return "noon";
+  const ap = hr < 12 ? "AM" : "PM";
+  let h = hr % 12; if (h === 0) h = 12;
+  return `${h} ${ap}`;
+}
+
+// Build the indices of the hourly arrays that fall on a given YYYY-MM-DD.
+function hourIdxForDay(f, ds) {
+  const t = (f.hourly && f.hourly.time) || [];
+  const out = [];
+  for (let j = 0; j < t.length; j++) if (t[j].slice(0, 10) === ds) out.push(j);
+  return out;
+}
+
+// Plain-language summary of WHEN precip is likely during a day (so a "rainy"
+// icon doesn't imply rain all day).
+function precipSummary(f, idxs) {
+  const h = f.hourly || {};
+  const pops = h.precipitation_probability || [];
+  const codes = h.weather_code || [];
+  const hrs = idxs.map((j) => ({ hour: new Date(h.time[j]).getHours(), pop: pops[j] == null ? 0 : pops[j], code: codes[j] }));
+  if (!hrs.length) return null;
+  const peak = Math.max(...hrs.map((x) => x.pop));
+  if (peak < 20) return { text: "Dry — little to no chance of precipitation", dry: true };
+  const thr = Math.max(25, Math.round(peak * 0.5));
+  const runs = []; let cur = null;
+  hrs.forEach((x) => {
+    if (x.pop >= thr) {
+      if (!cur) cur = { s: x.hour, e: x.hour, peak: x.pop, code: x.code };
+      else { cur.e = x.hour; if (x.pop > cur.peak) { cur.peak = x.pop; cur.code = x.code; } }
+    } else if (cur) { runs.push(cur); cur = null; }
+  });
+  if (cur) runs.push(cur);
+  if (!runs.length) {
+    const top = hrs.find((x) => x.pop === peak);
+    return { text: `Slight chance of ${precipNoun(top.code)} · up to ${peak}% chance` };
+  }
+  runs.sort((a, b) => (b.e - b.s) - (a.e - a.s));
+  const w = runs[0];
+  const verb = peak >= 60 ? "likely" : "possible";
+  const allDay = (w.e - w.s + 1) >= 20 || (w.s <= 1 && w.e >= 22);
+  const when = allDay ? "most of the day" : `${hourLabel(w.s)}–${hourLabel(w.e + 1)}`;
+  let text = `${cap(precipNoun(w.code))} ${verb} ${when}`;
+  if (runs.length > 1 && !allDay) text += " (& other times)";
+  text += ` · up to ${peak}% chance`;
+  return { text };
+}
+
+function dayDetail(f, i, ds) {
+  const d = f.daily, h = f.hourly || {};
+  const idxs = hourIdxForDay(f, ds);
+  const sum = precipSummary(f, idxs);
+
+  let chips = "";
+  for (let k = 0; k < idxs.length; k += 2) {
+    const j = idxs[k];
+    const lbl = new Date(h.time[j]).toLocaleTimeString([], { hour: "numeric" });
+    const pp = h.precipitation_probability ? h.precipitation_probability[j] : null;
+    const isDay = h.is_day ? h.is_day[j] : 1;
+    chips += `<div class="dd-hour"><div class="t">${lbl}</div>${icon(h.weather_code[j], isDay)}` +
+      `<div class="tp">${r0(h.temperature_2m[j])}°</div>` +
+      `<div class="pp">${pp != null && pp >= 5 ? pp + "%" : ""}</div></div>`;
+  }
+
+  const fmtT = (s) => (s ? new Date(s).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "–");
+  const stats = [];
+  if (d.sunrise) stats.push(`🌅 ${fmtT(d.sunrise[i])}`);
+  if (d.sunset) stats.push(`🌇 ${fmtT(d.sunset[i])}`);
+  if (d.precipitation_sum && d.precipitation_sum[i] != null) stats.push(`🌧 ${r1(d.precipitation_sum[i])} ${precU()} total`);
+  if (d.wind_speed_10m_max) stats.push(`🌬 ${r0(d.wind_speed_10m_max[i])} ${windU()} max`);
+  if (d.uv_index_max) stats.push(`☀ UV ${r0(d.uv_index_max[i])}`);
+
+  return `<div class="day-detail" hidden>
+    ${sum ? `<div class="dd-sum${sum.dry ? " dry" : ""}">${sum.text}</div>` : ""}
+    <div class="dd-hours">${chips}</div>
+    <div class="dd-stats">${stats.map((s) => `<span>${s}</span>`).join("")}</div>
+  </div>`;
+}
+
 function renderDaily(f) {
   const d = f.daily;
   const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: f.timezone });
@@ -434,30 +529,55 @@ function renderDaily(f) {
 
   const rows = [];
   for (let i = start; i < d.time.length; i++) {
-    const date = new Date(d.time[i] + "T12:00:00");
+    const ds = d.time[i];
+    const date = new Date(ds + "T12:00:00");
     const name = i === start ? "Today" : date.toLocaleDateString([], { weekday: "short" });
     const sub = date.toLocaleDateString([], { month: "short", day: "numeric" });
     const lo = d.temperature_2m_min[i], hi = d.temperature_2m_max[i];
     const left = ((lo - gMin) / span) * 100;
     const width = ((hi - lo) / span) * 100;
     const pop = d.precipitation_probability_max ? d.precipitation_probability_max[i] : null;
+    const cond = describe(d.weather_code[i]).label;
     rows.push(`
-      <div class="day">
-        <div class="dname">${name}<span class="sub">${sub}</span><span class="dcond">${describe(d.weather_code[i]).label}</span></div>
-        ${icon(d.weather_code[i], 1)}
-        <div class="barwrap">
-          <span class="lo">${r0(lo)}°</span>
-          <span class="track"><span class="fill" style="left:${left}%;width:${Math.max(6, width)}%"></span></span>
-          <span class="hi">${r0(hi)}°</span>
+      <div class="day-item">
+        <div class="day" role="button" tabindex="0" aria-expanded="false">
+          <div class="dname"><span class="dchev">›</span>${name}<span class="sub">${sub}</span><span class="dcond" title="${cond}">${cond}</span></div>
+          ${icon(d.weather_code[i], 1)}
+          <div class="barwrap">
+            <span class="lo">${r0(lo)}°</span>
+            <span class="track"><span class="fill" style="left:${left}%;width:${Math.max(6, width)}%"></span></span>
+            <span class="hi">${r0(hi)}°</span>
+          </div>
+          <div class="meta">
+            <span>${pop != null ? "💧 " + r0(pop) + "%" : ""}</span>
+            <span>🌬 ${r0(d.wind_speed_10m_max[i])}</span>
+            <span>☀ ${r0(d.uv_index_max[i])}</span>
+          </div>
         </div>
-        <div class="meta">
-          <span>${pop != null ? "💧 " + r0(pop) + "%" : ""}</span>
-          <span>🌬 ${r0(d.wind_speed_10m_max[i])}</span>
-          <span>☀ ${r0(d.uv_index_max[i])}</span>
-        </div>
+        ${dayDetail(f, i, ds)}
       </div>`);
   }
   $("days").innerHTML = rows.join("");
+
+  if (!daysWired) {
+    daysWired = true;
+    const toggle = (head) => {
+      const item = head.closest(".day-item");
+      const det = item.querySelector(".day-detail");
+      const open = item.classList.toggle("open");
+      head.setAttribute("aria-expanded", open ? "true" : "false");
+      if (det) det.hidden = !open;
+    };
+    $("days").addEventListener("click", (e) => {
+      const head = e.target.closest(".day");
+      if (head) toggle(head);
+    });
+    $("days").addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const head = e.target.closest(".day");
+      if (head) { e.preventDefault(); toggle(head); }
+    });
+  }
 }
 
 // --- Air quality ----------------------------------------------------------

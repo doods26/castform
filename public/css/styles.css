@@ -202,12 +202,17 @@ header.topbar {
 .hour .pp { font-size: 0.72rem; color: var(--accent); min-height: 14px; }
 
 /* Daily ------------------------------------------------------------------- */
-.days { display: flex; flex-direction: column; gap: 4px; }
-.day { display: grid; grid-template-columns: 96px 40px 1fr 116px; align-items: center; gap: 12px; padding: 6px 6px; border-radius: 12px; }
+.days { display: flex; flex-direction: column; gap: 2px; }
+.day-item { border-radius: 12px; transition: background .15s; }
+.day-item.open { background: rgba(255,255,255,0.05); }
+.day { display: grid; grid-template-columns: 108px 40px 1fr 116px; align-items: center; gap: 12px; padding: 7px 6px; border-radius: 12px; cursor: pointer; }
 .day:hover { background: var(--glass); }
+.day:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .day .dname { font-weight: 600; line-height: 1.2; }
-.day .dname .sub { display: block; font-size: 0.7rem; color: var(--faint); font-weight: 500; }
-.day .dname .dcond { display: block; font-size: 0.7rem; color: var(--muted); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 96px; }
+.day .dname .dchev { display: inline-block; color: var(--faint); font-weight: 700; margin-right: 4px; transition: transform .2s; }
+.day-item.open .dchev { transform: rotate(90deg); color: var(--accent); }
+.day .dname .sub { display: block; font-size: 0.7rem; color: var(--faint); font-weight: 500; margin-left: 14px; }
+.day .dname .dcond { display: block; font-size: 0.7rem; color: var(--muted); font-weight: 500; line-height: 1.2; margin-left: 14px; }
 .day .wxicon { width: 36px; height: 36px; }
 .day .barwrap { display: flex; align-items: center; gap: 10px; }
 .day .lo { color: var(--muted); width: 34px; text-align: right; }
@@ -215,7 +220,31 @@ header.topbar {
 .day .track { flex: 1; height: 6px; border-radius: 4px; background: rgba(255,255,255,0.1); position: relative; }
 .day .fill { position: absolute; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #5fa8ff, #ffd45e, #ff8a5f); }
 .day .meta { display: flex; gap: 12px; justify-content: flex-end; color: var(--muted); font-size: 0.82rem; }
-@media (max-width: 640px) { .day { grid-template-columns: 70px 36px 1fr; } .day .meta { display: none; } }
+@media (max-width: 640px) { .day { grid-template-columns: 84px 34px 1fr; } .day .meta { display: none; } }
+
+/* Expandable per-day detail — shows WHEN precip is likely, not "all day" */
+.day-detail { padding: 2px 8px 12px 22px; animation: fadeIn .35s ease both; }
+.day-detail[hidden] { display: none; }
+.dd-sum { font-weight: 600; color: var(--text); margin: 2px 0 10px; font-size: 0.92rem; }
+.dd-sum.dry { color: var(--muted); font-weight: 500; }
+.dd-hours { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
+.dd-hour { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 44px; }
+.dd-hour .t { font-size: 0.7rem; color: var(--muted); }
+.dd-hour .wxicon { width: 30px; height: 30px; }
+.dd-hour .tp { font-weight: 700; font-size: 0.86rem; }
+.dd-hour .pp { font-size: 0.66rem; color: var(--accent); min-height: 12px; }
+.dd-stats { display: flex; flex-wrap: wrap; gap: 7px 16px; margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--stroke); font-size: 0.8rem; color: var(--muted); }
+
+/* Radar full-screen overlay */
+body.radar-fs-open { overflow: hidden; }
+.radar-card.radar-fullscreen {
+  position: fixed; inset: 0; z-index: 1000; margin: 0; border-radius: 0;
+  display: flex; flex-direction: column; padding: 14px 16px;
+  background: #0b1020; box-shadow: none;
+}
+.radar-card.radar-fullscreen .radar-map-wrap { flex: 1 1 auto; height: auto; border-radius: 14px; }
+.radar-expand { min-width: 40px; justify-content: center; font-size: 1.05rem; }
 
 /* Air quality ------------------------------------------------------------- */
 .aqi-head { display: flex; align-items: center; gap: 18px; }
@@ -526,7 +555,7 @@ header.topbar {
 
   /* Section headers with side controls wrap onto two lines */
   .radar-head { flex-wrap: wrap; }
-  .radar-head-right { width: 100%; justify-content: space-between; }
+  .radar-head-right { width: 100%; justify-content: space-between; flex-wrap: wrap; }
 
   /* Compare — stack the two cities vertically */
   .compare-search { flex: 1 1 100%; }

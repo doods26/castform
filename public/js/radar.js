@@ -124,12 +124,47 @@ function cycleSpeed() {
   if (playing) schedule();
 }
 
+function setFullscreen(on) {
+  const card = document.querySelector(".radar-card");
+  if (!card) return;
+  card.classList.toggle("radar-fullscreen", on);
+  document.body.classList.toggle("radar-fs-open", on);
+  const btn = $("radarExpand");
+  if (btn) {
+    btn.textContent = on ? "✕" : "⛶";
+    btn.title = on ? "Exit full screen" : "Expand to full screen";
+  }
+  // Let the layout settle, then tell Leaflet to re-measure (twice, for the
+  // CSS transition) and keep the marker centered.
+  const refit = () => {
+    if (!map) return;
+    map.invalidateSize();
+    if (marker) map.panTo(marker.getLatLng(), { animate: false });
+  };
+  setTimeout(refit, 60);
+  setTimeout(refit, 340);
+}
+
+function toggleFullscreen() {
+  const card = document.querySelector(".radar-card");
+  setFullscreen(!(card && card.classList.contains("radar-fullscreen")));
+}
+
 function wireControls() {
   $("radarPlay").onclick = togglePlay;
   $("radarSpeed").onclick = cycleSpeed;
   $("radarScrub").oninput = (e) => { pause(); showFrame(+e.target.value, false); };
   document.querySelectorAll("#radarMode button").forEach((b) => {
     b.onclick = () => setMode(b.dataset.mode);
+  });
+  const exp = $("radarExpand");
+  if (exp) exp.onclick = toggleFullscreen;
+  // Esc exits full screen.
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      const card = document.querySelector(".radar-card");
+      if (card && card.classList.contains("radar-fullscreen")) setFullscreen(false);
+    }
   });
 }
 

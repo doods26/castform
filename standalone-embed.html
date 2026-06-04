@@ -195,12 +195,17 @@ header.topbar {
 .hour .tp { font-weight: 700; }
 .hour .pp { font-size: 0.72rem; color: var(--accent); min-height: 14px; }
 /* Daily ------------------------------------------------------------------- */
-.days { display: flex; flex-direction: column; gap: 4px; }
-.day { display: grid; grid-template-columns: 96px 40px 1fr 116px; align-items: center; gap: 12px; padding: 6px 6px; border-radius: 12px; }
+.days { display: flex; flex-direction: column; gap: 2px; }
+.day-item { border-radius: 12px; transition: background .15s; }
+.day-item.open { background: rgba(255,255,255,0.05); }
+.day { display: grid; grid-template-columns: 108px 40px 1fr 116px; align-items: center; gap: 12px; padding: 7px 6px; border-radius: 12px; cursor: pointer; }
 .day:hover { background: var(--glass); }
+.day:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .day .dname { font-weight: 600; line-height: 1.2; }
-.day .dname .sub { display: block; font-size: 0.7rem; color: var(--faint); font-weight: 500; }
-.day .dname .dcond { display: block; font-size: 0.7rem; color: var(--muted); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 96px; }
+.day .dname .dchev { display: inline-block; color: var(--faint); font-weight: 700; margin-right: 4px; transition: transform .2s; }
+.day-item.open .dchev { transform: rotate(90deg); color: var(--accent); }
+.day .dname .sub { display: block; font-size: 0.7rem; color: var(--faint); font-weight: 500; margin-left: 14px; }
+.day .dname .dcond { display: block; font-size: 0.7rem; color: var(--muted); font-weight: 500; line-height: 1.2; margin-left: 14px; }
 .day .wxicon { width: 36px; height: 36px; }
 .day .barwrap { display: flex; align-items: center; gap: 10px; }
 .day .lo { color: var(--muted); width: 34px; text-align: right; }
@@ -208,7 +213,29 @@ header.topbar {
 .day .track { flex: 1; height: 6px; border-radius: 4px; background: rgba(255,255,255,0.1); position: relative; }
 .day .fill { position: absolute; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #5fa8ff, #ffd45e, #ff8a5f); }
 .day .meta { display: flex; gap: 12px; justify-content: flex-end; color: var(--muted); font-size: 0.82rem; }
-@media (max-width: 640px) { .day { grid-template-columns: 70px 36px 1fr; } .day .meta { display: none; } }
+@media (max-width: 640px) { .day { grid-template-columns: 84px 34px 1fr; } .day .meta { display: none; } }
+/* Expandable per-day detail — shows WHEN precip is likely, not &quot;all day&quot; */
+.day-detail { padding: 2px 8px 12px 22px; animation: fadeIn .35s ease both; }
+.day-detail[hidden] { display: none; }
+.dd-sum { font-weight: 600; color: var(--text); margin: 2px 0 10px; font-size: 0.92rem; }
+.dd-sum.dry { color: var(--muted); font-weight: 500; }
+.dd-hours { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
+.dd-hour { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 44px; }
+.dd-hour .t { font-size: 0.7rem; color: var(--muted); }
+.dd-hour .wxicon { width: 30px; height: 30px; }
+.dd-hour .tp { font-weight: 700; font-size: 0.86rem; }
+.dd-hour .pp { font-size: 0.66rem; color: var(--accent); min-height: 12px; }
+.dd-stats { display: flex; flex-wrap: wrap; gap: 7px 16px; margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--stroke); font-size: 0.8rem; color: var(--muted); }
+/* Radar full-screen overlay */
+body.radar-fs-open { overflow: hidden; }
+.radar-card.radar-fullscreen {
+  position: fixed; inset: 0; z-index: 1000; margin: 0; border-radius: 0;
+  display: flex; flex-direction: column; padding: 14px 16px;
+  background: #0b1020; box-shadow: none;
+}
+.radar-card.radar-fullscreen .radar-map-wrap { flex: 1 1 auto; height: auto; border-radius: 14px; }
+.radar-expand { min-width: 40px; justify-content: center; font-size: 1.05rem; }
 /* Air quality ------------------------------------------------------------- */
 .aqi-head { display: flex; align-items: center; gap: 18px; }
 .aqi-dial { position: relative; width: 120px; height: 120px; flex: 0 0 auto; }
@@ -481,7 +508,7 @@ header.topbar {
   .gauge-grid { grid-template-columns: repeat(2, 1fr); }
   /* Section headers with side controls wrap onto two lines */
   .radar-head { flex-wrap: wrap; }
-  .radar-head-right { width: 100%; justify-content: space-between; }
+  .radar-head-right { width: 100%; justify-content: space-between; flex-wrap: wrap; }
   /* Compare — stack the two cities vertically */
   .compare-search { flex: 1 1 100%; }
   .compare-panel { flex-direction: column; }
@@ -554,6 +581,7 @@ header.topbar {
               <button data-mode=&quot;satellite&quot;>Satellite</button>
             </div>
             <div class=&quot;radar-frame-label&quot; id=&quot;radarFrameLabel&quot;></div>
+            <button class=&quot;btn icon-btn radar-expand&quot; id=&quot;radarExpand&quot; title=&quot;Expand to full screen&quot; aria-label=&quot;Expand radar to full screen&quot;>⛶</button>
           </div>
         </div>
         <div class=&quot;radar-map-wrap&quot;>
@@ -1153,12 +1181,45 @@ function cycleSpeed() {
   $(&quot;radarSpeed&quot;).textContent = `${SPEEDS[speedIdx]}×`;
   if (playing) schedule();
 }
+function setFullscreen(on) {
+  const card = document.querySelector(&quot;.radar-card&quot;);
+  if (!card) return;
+  card.classList.toggle(&quot;radar-fullscreen&quot;, on);
+  document.body.classList.toggle(&quot;radar-fs-open&quot;, on);
+  const btn = $(&quot;radarExpand&quot;);
+  if (btn) {
+    btn.textContent = on ? &quot;✕&quot; : &quot;⛶&quot;;
+    btn.title = on ? &quot;Exit full screen&quot; : &quot;Expand to full screen&quot;;
+  }
+  // Let the layout settle, then tell Leaflet to re-measure (twice, for the
+  // CSS transition) and keep the marker centered.
+  const refit = () => {
+    if (!map) return;
+    map.invalidateSize();
+    if (marker) map.panTo(marker.getLatLng(), { animate: false });
+  };
+  setTimeout(refit, 60);
+  setTimeout(refit, 340);
+}
+function toggleFullscreen() {
+  const card = document.querySelector(&quot;.radar-card&quot;);
+  setFullscreen(!(card &amp;&amp; card.classList.contains(&quot;radar-fullscreen&quot;)));
+}
 function wireControls() {
   $(&quot;radarPlay&quot;).onclick = togglePlay;
   $(&quot;radarSpeed&quot;).onclick = cycleSpeed;
   $(&quot;radarScrub&quot;).oninput = (e) => { pause(); showFrame(+e.target.value, false); };
   document.querySelectorAll(&quot;#radarMode button&quot;).forEach((b) => {
     b.onclick = () => setMode(b.dataset.mode);
+  });
+  const exp = $(&quot;radarExpand&quot;);
+  if (exp) exp.onclick = toggleFullscreen;
+  // Esc exits full screen.
+  document.addEventListener(&quot;keydown&quot;, (e) => {
+    if (e.key === &quot;Escape&quot;) {
+      const card = document.querySelector(&quot;.radar-card&quot;);
+      if (card &amp;&amp; card.classList.contains(&quot;radar-fullscreen&quot;)) setFullscreen(false);
+    }
   });
 }
 function startFromNow() {
@@ -1643,6 +1704,91 @@ function renderHourly(f) {
   }
 }
 // --- Daily ----------------------------------------------------------------
+let daysWired = false;
+const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+function precipNoun(code) {
+  if ((code >= 71 &amp;&amp; code <= 77) || code === 85 || code === 86) return &quot;snow&quot;;
+  if (code >= 95) return &quot;storms&quot;;
+  if (code >= 80 &amp;&amp; code <= 82) return &quot;showers&quot;;
+  if (code >= 51 &amp;&amp; code <= 57) return &quot;drizzle&quot;;
+  if (code >= 61 &amp;&amp; code <= 67) return &quot;rain&quot;;
+  return &quot;precipitation&quot;;
+}
+function hourLabel(hr) {
+  hr = ((hr % 24) + 24) % 24;
+  if (hr === 0) return &quot;midnight&quot;;
+  if (hr === 12) return &quot;noon&quot;;
+  const ap = hr < 12 ? &quot;AM&quot; : &quot;PM&quot;;
+  let h = hr % 12; if (h === 0) h = 12;
+  return `${h} ${ap}`;
+}
+// Build the indices of the hourly arrays that fall on a given YYYY-MM-DD.
+function hourIdxForDay(f, ds) {
+  const t = (f.hourly &amp;&amp; f.hourly.time) || [];
+  const out = [];
+  for (let j = 0; j < t.length; j++) if (t[j].slice(0, 10) === ds) out.push(j);
+  return out;
+}
+// Plain-language summary of WHEN precip is likely during a day (so a &quot;rainy&quot;
+// icon doesn't imply rain all day).
+function precipSummary(f, idxs) {
+  const h = f.hourly || {};
+  const pops = h.precipitation_probability || [];
+  const codes = h.weather_code || [];
+  const hrs = idxs.map((j) => ({ hour: new Date(h.time[j]).getHours(), pop: pops[j] == null ? 0 : pops[j], code: codes[j] }));
+  if (!hrs.length) return null;
+  const peak = Math.max(...hrs.map((x) => x.pop));
+  if (peak < 20) return { text: &quot;Dry — little to no chance of precipitation&quot;, dry: true };
+  const thr = Math.max(25, Math.round(peak * 0.5));
+  const runs = []; let cur = null;
+  hrs.forEach((x) => {
+    if (x.pop >= thr) {
+      if (!cur) cur = { s: x.hour, e: x.hour, peak: x.pop, code: x.code };
+      else { cur.e = x.hour; if (x.pop > cur.peak) { cur.peak = x.pop; cur.code = x.code; } }
+    } else if (cur) { runs.push(cur); cur = null; }
+  });
+  if (cur) runs.push(cur);
+  if (!runs.length) {
+    const top = hrs.find((x) => x.pop === peak);
+    return { text: `Slight chance of ${precipNoun(top.code)} · up to ${peak}% chance` };
+  }
+  runs.sort((a, b) => (b.e - b.s) - (a.e - a.s));
+  const w = runs[0];
+  const verb = peak >= 60 ? &quot;likely&quot; : &quot;possible&quot;;
+  const allDay = (w.e - w.s + 1) >= 20 || (w.s <= 1 &amp;&amp; w.e >= 22);
+  const when = allDay ? &quot;most of the day&quot; : `${hourLabel(w.s)}–${hourLabel(w.e + 1)}`;
+  let text = `${cap(precipNoun(w.code))} ${verb} ${when}`;
+  if (runs.length > 1 &amp;&amp; !allDay) text += &quot; (&amp; other times)&quot;;
+  text += ` · up to ${peak}% chance`;
+  return { text };
+}
+function dayDetail(f, i, ds) {
+  const d = f.daily, h = f.hourly || {};
+  const idxs = hourIdxForDay(f, ds);
+  const sum = precipSummary(f, idxs);
+  let chips = &quot;&quot;;
+  for (let k = 0; k < idxs.length; k += 2) {
+    const j = idxs[k];
+    const lbl = new Date(h.time[j]).toLocaleTimeString([], { hour: &quot;numeric&quot; });
+    const pp = h.precipitation_probability ? h.precipitation_probability[j] : null;
+    const isDay = h.is_day ? h.is_day[j] : 1;
+    chips += `<div class=&quot;dd-hour&quot;><div class=&quot;t&quot;>${lbl}</div>${icon(h.weather_code[j], isDay)}` +
+      `<div class=&quot;tp&quot;>${r0(h.temperature_2m[j])}°</div>` +
+      `<div class=&quot;pp&quot;>${pp != null &amp;&amp; pp >= 5 ? pp + &quot;%&quot; : &quot;&quot;}</div></div>`;
+  }
+  const fmtT = (s) => (s ? new Date(s).toLocaleTimeString([], { hour: &quot;numeric&quot;, minute: &quot;2-digit&quot; }) : &quot;–&quot;);
+  const stats = [];
+  if (d.sunrise) stats.push(`🌅 ${fmtT(d.sunrise[i])}`);
+  if (d.sunset) stats.push(`🌇 ${fmtT(d.sunset[i])}`);
+  if (d.precipitation_sum &amp;&amp; d.precipitation_sum[i] != null) stats.push(`🌧 ${r1(d.precipitation_sum[i])} ${precU()} total`);
+  if (d.wind_speed_10m_max) stats.push(`🌬 ${r0(d.wind_speed_10m_max[i])} ${windU()} max`);
+  if (d.uv_index_max) stats.push(`☀ UV ${r0(d.uv_index_max[i])}`);
+  return `<div class=&quot;day-detail&quot; hidden>
+    ${sum ? `<div class=&quot;dd-sum${sum.dry ? &quot; dry&quot; : &quot;&quot;}&quot;>${sum.text}</div>` : &quot;&quot;}
+    <div class=&quot;dd-hours&quot;>${chips}</div>
+    <div class=&quot;dd-stats&quot;>${stats.map((s) => `<span>${s}</span>`).join(&quot;&quot;)}</div>
+  </div>`;
+}
 function renderDaily(f) {
   const d = f.daily;
   const todayStr = new Date().toLocaleDateString(&quot;en-CA&quot;, { timeZone: f.timezone });
@@ -1654,30 +1800,54 @@ function renderDaily(f) {
   const span = Math.max(1, gMax - gMin);
   const rows = [];
   for (let i = start; i < d.time.length; i++) {
-    const date = new Date(d.time[i] + &quot;T12:00:00&quot;);
+    const ds = d.time[i];
+    const date = new Date(ds + &quot;T12:00:00&quot;);
     const name = i === start ? &quot;Today&quot; : date.toLocaleDateString([], { weekday: &quot;short&quot; });
     const sub = date.toLocaleDateString([], { month: &quot;short&quot;, day: &quot;numeric&quot; });
     const lo = d.temperature_2m_min[i], hi = d.temperature_2m_max[i];
     const left = ((lo - gMin) / span) * 100;
     const width = ((hi - lo) / span) * 100;
     const pop = d.precipitation_probability_max ? d.precipitation_probability_max[i] : null;
+    const cond = describe(d.weather_code[i]).label;
     rows.push(`
-      <div class=&quot;day&quot;>
-        <div class=&quot;dname&quot;>${name}<span class=&quot;sub&quot;>${sub}</span><span class=&quot;dcond&quot;>${describe(d.weather_code[i]).label}</span></div>
-        ${icon(d.weather_code[i], 1)}
-        <div class=&quot;barwrap&quot;>
-          <span class=&quot;lo&quot;>${r0(lo)}°</span>
-          <span class=&quot;track&quot;><span class=&quot;fill&quot; style=&quot;left:${left}%;width:${Math.max(6, width)}%&quot;></span></span>
-          <span class=&quot;hi&quot;>${r0(hi)}°</span>
+      <div class=&quot;day-item&quot;>
+        <div class=&quot;day&quot; role=&quot;button&quot; tabindex=&quot;0&quot; aria-expanded=&quot;false&quot;>
+          <div class=&quot;dname&quot;><span class=&quot;dchev&quot;>›</span>${name}<span class=&quot;sub&quot;>${sub}</span><span class=&quot;dcond&quot; title=&quot;${cond}&quot;>${cond}</span></div>
+          ${icon(d.weather_code[i], 1)}
+          <div class=&quot;barwrap&quot;>
+            <span class=&quot;lo&quot;>${r0(lo)}°</span>
+            <span class=&quot;track&quot;><span class=&quot;fill&quot; style=&quot;left:${left}%;width:${Math.max(6, width)}%&quot;></span></span>
+            <span class=&quot;hi&quot;>${r0(hi)}°</span>
+          </div>
+          <div class=&quot;meta&quot;>
+            <span>${pop != null ? &quot;💧 &quot; + r0(pop) + &quot;%&quot; : &quot;&quot;}</span>
+            <span>🌬 ${r0(d.wind_speed_10m_max[i])}</span>
+            <span>☀ ${r0(d.uv_index_max[i])}</span>
+          </div>
         </div>
-        <div class=&quot;meta&quot;>
-          <span>${pop != null ? &quot;💧 &quot; + r0(pop) + &quot;%&quot; : &quot;&quot;}</span>
-          <span>🌬 ${r0(d.wind_speed_10m_max[i])}</span>
-          <span>☀ ${r0(d.uv_index_max[i])}</span>
-        </div>
+        ${dayDetail(f, i, ds)}
       </div>`);
   }
   $(&quot;days&quot;).innerHTML = rows.join(&quot;&quot;);
+  if (!daysWired) {
+    daysWired = true;
+    const toggle = (head) => {
+      const item = head.closest(&quot;.day-item&quot;);
+      const det = item.querySelector(&quot;.day-detail&quot;);
+      const open = item.classList.toggle(&quot;open&quot;);
+      head.setAttribute(&quot;aria-expanded&quot;, open ? &quot;true&quot; : &quot;false&quot;);
+      if (det) det.hidden = !open;
+    };
+    $(&quot;days&quot;).addEventListener(&quot;click&quot;, (e) => {
+      const head = e.target.closest(&quot;.day&quot;);
+      if (head) toggle(head);
+    });
+    $(&quot;days&quot;).addEventListener(&quot;keydown&quot;, (e) => {
+      if (e.key !== &quot;Enter&quot; &amp;&amp; e.key !== &quot; &quot;) return;
+      const head = e.target.closest(&quot;.day&quot;);
+      if (head) { e.preventDefault(); toggle(head); }
+    });
+  }
 }
 // --- Air quality ----------------------------------------------------------
 function aqiCategory(aqi, european) {
