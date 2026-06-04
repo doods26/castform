@@ -1,0 +1,965 @@
+import { describe, icon, compass } from "./wmo.js";
+import { initRadar } from "./radar.js";
+import { applyEffects, wireFullscreen } from "./effects.js";
+import { gauge, compassGauge } from "./gauge.js";
+
+// --- State ----------------------------------------------------------------
+const state = {
+  units: localStorage.getItem("units") || "imperial",
+  place: JSON.parse(localStorage.getItem("place") || "null"),
+  favorites: JSON.parse(localStorage.getItem("favorites") || "[]"),
+};
+let refreshTimer = null;
+let chart = null;
+let histChart = null;
+
+const $ = (id) => document.getElementById(id);
+const tempU = () => (state.units === "imperial" ? "°F" : "°C");
+const windU = () => (state.units === "imperial" ? "mph" : "km/h");
+const precU = () => (state.units === "imperial" ? "in" : "mm");
+const r0 = (n) => (n == null ? "–" : Math.round(n));
+const r1 = (n) => (n == null ? "–" : Math.round(n * 10) / 10);
+
+// --- Boot -----------------------------------------------------------------
+function boot() {
+  $("unitToggle").querySelectorAll("button").forEach((b) => {
+    b.classList.toggle("active", b.dataset.units === state.units);
+    b.onclick = () => setUnits(b.dataset.units);
+  });
+  $("geoBtn").onclick = useMyLocation;
+  $("starBtn").onclick = toggleFavorite;
+  setupSearch();
+  setupCompare();
+  setupNotifications();
+  wireFullscreen($("fullscreenBtn"));
+  buildStars();
+  renderFavorites();
+  scheduleRefresh();
+
+  // Load the last place if we have one, otherwise a sensible default.
+  // We intentionally do NOT auto-prompt for geolocation on first load —
+  // the permission modal is jarring; "My location" makes it opt-in.
+  loadWeather(state.place || fallbackPlace());
+}
+
+function setUnits(u) {
+  if (u === state.units) return;
+  state.units = u;
+  localStorage.setItem("units", u);
+  $("unitToggle").querySelectorAll("button").forEach((b) =>
+    b.classList.toggle("active", b.dataset.units === u)
+  );
+  if (state.place) loadWeather(state.place);
+}
+
+// --- Search (debounced geocoding) ----------------------------------------
+function setupSearch() {
+  const input = $("searchInput");
+  const box = $("searchResults");
+  let timer;
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (q.length < 2) { box.innerHTML = ""; return; }
+    timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        box.innerHTML = "";
+        (data.results || []).forEach((p) => {
+          const btn = document.createElement("button");
+          const where = [p.admin1, p.country].filter(Boolean).join(", ");
+          btn.innerHTML = `<span>${p.name}</span><span class="sub">${where}</span>`;
+          btn.onclick = () => {
+            input.value = "";
+            box.innerHTML = "";
+            loadWeather({
+              name: p.name, admin1: p.admin1, country: p.country,
+              country_code: p.country_code, lat: p.latitude, lon: p.longitude,
+            });
+          };
+          box.appendChild(btn);
+        });
+      } catch (e) { /* ignore */ }
+    }, 280);
+  });
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".search")) box.innerHTML = "";
+  });
+}
+
+// --- Geolocation ----------------------------------------------------------
+function useMyLocation() {
+  // Browsers block geolocation on insecure (plain http, non-localhost) origins —
+  // e.g. when viewing over the LAN on a phone. Guide the user to search instead.
+  if (!window.isSecureContext && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
+    $("searchInput").focus();
+    $("searchInput").placeholder = "Location needs HTTPS — search your city here ↵";
+    return;
+  }
+  if (!navigator.geolocation) return loadWeather(state.place || fallbackPlace());
+  setLoading("Finding your location…");
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      const { latitude: lat, longitude: lon } = pos.coords;
+      let info = {};
+      try {
+        const r = await fetch(`/api/reverse?lat=${lat}&lon=${lon}`);
+        info = await r.json();
+      } catch (e) { /* ignore */ }
+      loadWeather({
+        name: info.name || "My location", admin1: info.admin1,
+        country: info.country, country_code: info.country_code, lat, lon,
+      });
+    },
+    () => loadWeather(state.place || fallbackPlace()),
+    { timeout: 8000 }
+  );
+}
+
+// One-time twinkling starfield (revealed at night via CSS).
+function buildStars() {
+  const el = $("stars");
+  if (!el || el.childElementCount) return;
+  let html = "";
+  for (let i = 0; i < 90; i++) {
+    const x = Math.random() * 100, y = Math.random() * 100;
+    const tw = 2 + Math.random() * 4, td = Math.random() * 4;
+    const sz = Math.random() < 0.2 ? 3 : 2;
+    html += `<i style="left:${x.toFixed(1)}%;top:${y.toFixed(1)}%;width:${sz}px;height:${sz}px;--tw:${tw.toFixed(1)}s;--td:${td.toFixed(1)}s"></i>`;
+  }
+  el.innerHTML = html;
+}
+
+const fallbackPlace = () => ({
+  name: "New York", admin1: "New York", country: "United States",
+  country_code: "US", lat: 40.7128, lon: -74.006,
+});
+
+// --- Load + render --------------------------------------------------------
+function setLoading(msg) {
+  $("loading").classList.remove("hidden");
+  $("content").classList.add("hidden");
+  $("loadingText").textContent = msg || "Loading weather…";
+}
+
+async function loadWeather(place, silent) {
+  state.place = place;
+  localStorage.setItem("place", JSON.stringify(place));
+  if (!silent) setLoading(`Loading weather for ${place.name}…`);
+  try {
+    const url = `/api/weather?lat=${place.lat}&lon=${place.lon}` +
+      `&units=${state.units}&country_code=${place.country_code || ""}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.error) throw new Error(data.detail || data.error);
+    // Reveal content BEFORE rendering so the chart container has a real
+    // width — Chart.js sizes its canvas to the container at creation time,
+    // and a display:none parent would collapse it to 0px.
+    $("loading").classList.add("hidden");
+    $("content").classList.remove("hidden");
+    render(place, data);
+    if (silent) pulseUpdated();
+  } catch (e) {
+    if (silent) return; // keep showing the last good data on a failed refresh
+    $("loading").innerHTML = `<div class="error-box"><b>Couldn't load weather.</b><br>${e.message}<br><br><button class="btn" onclick="location.reload()">Retry</button></div>`;
+  }
+}
+
+function render(place, data) {
+  state.lastData = data; // reused by the city comparison (no refetch of city A)
+  const f = data.forecast;
+  const cur = f.current;
+  const code = cur.weather_code;
+  const meta = describe(code);
+
+  // Theme the page
+  document.body.dataset.theme = meta.theme;
+  document.body.dataset.night = cur.is_day ? "0" : "1";
+  toggleRain(meta.theme === "rain" || meta.theme === "storm");
+
+  applyEffects(meta.theme, cur);
+  renderCurrent(place, f, meta);
+  renderTiles(f, data.air_quality);
+  renderHourly(f);
+  renderDaily(f);
+  renderAirQuality(data.air_quality, data.pollen);
+  renderSun(f);
+  renderMarine(data.marine);
+  renderAlerts(data.alerts);
+  renderNowcast(f);
+  maybeNotify(place, f, data.alerts);
+  renderFavorites();
+  // Radar map (created once, re-centered on each location change).
+  initRadar(place.lat, place.lon, place.name, onMapPick);
+  // Historical reference (async — compares today to the climate normal).
+  const todayStr2 = new Date().toLocaleDateString("en-CA", { timeZone: f.timezone });
+  let di2 = f.daily.time.indexOf(todayStr2); if (di2 < 0) di2 = 1;
+  loadHistory(place, f.daily.temperature_2m_max[di2], f.daily.temperature_2m_min[di2]);
+
+  const when = new Date(data.fetched_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  $("foot").innerHTML =
+    `Updated ${when} · ${place.lat.toFixed(2)}, ${place.lon.toFixed(2)} · ` +
+    `Data: <a href="https://open-meteo.com" target="_blank">Open-Meteo</a>` +
+    `${(data.alerts && data.alerts.length) || (place.country_code === "US") ? ` + <a href="https://weather.gov" target="_blank">NWS</a>` : ""}` +
+    ` · timezone ${f.timezone}`;
+}
+
+// --- Current --------------------------------------------------------------
+function renderCurrent(place, f, meta) {
+  const c = f.current;
+  const today = f.daily;
+  // find today's index (past_days=1 shifts index; match by date)
+  const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: f.timezone });
+  let di = today.time.indexOf(todayStr);
+  if (di < 0) di = 1;
+  const where = [place.admin1, place.country].filter(Boolean).join(", ");
+  const form = castformForm(meta.theme, c.is_day);
+  const imp = state.units === "imperial";
+  const tMin = imp ? -10 : -25, tMax = imp ? 115 : 46;
+  const tempGauge = gauge({
+    value: c.temperature_2m, min: tMin, max: tMax, unit: "°", decimals: 0,
+    label: meta.label,
+    colors: ["#5aa9ff", "#54d6c2", "#a3e635", "#ffd45e", "#ff8a3d", "#ff4d4d"],
+  });
+  $("currentCard").innerHTML = `
+    <div class="place">${place.name}${where ? `<span class="sub"> · ${where}</span>` : ""}<span class="form-badge" title="Castform changes form with the weather">${form.emoji} ${form.name}</span></div>
+    <div class="cur-main">
+      <div class="hero-gauge">${tempGauge}</div>
+      <div class="cur-info">
+        <div class="hero-cond">
+          <span class="hero-ico">${icon(c.weather_code, c.is_day)}</span>
+          <div>
+            <div class="cond">${meta.label}</div>
+            <div class="feels">Feels like ${r0(c.apparent_temperature)}${tempU()}</div>
+          </div>
+        </div>
+        <div class="hilo">High <b>${r0(today.temperature_2m_max[di])}°</b> · Low <b>${r0(today.temperature_2m_min[di])}°</b></div>
+        ${comfortLine(c)}
+      </div>
+    </div>
+    <div class="hero-today">
+      <div class="ht"><span class="htk">🌅 Sunrise</span><span class="htv">${sunFmt(today.sunrise[di])}</span></div>
+      <div class="ht"><span class="htk">🌇 Sunset</span><span class="htv">${sunFmt(today.sunset[di])}</span></div>
+      <div class="ht"><span class="htk">☔ Rain today</span><span class="htv">${today.precipitation_probability_max ? r0(today.precipitation_probability_max[di]) + "%" : "–"}</span></div>
+    </div>
+  `;
+}
+
+const sunFmt = (iso) => iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "–";
+
+// Castform's in-game forms, mapped to the live weather (its gimmick!).
+function castformForm(theme, isDay) {
+  if (theme === "clear") return { name: isDay ? "Sunny Form" : "Normal Form", emoji: isDay ? "☀️" : "🌙" };
+  if (theme === "rain" || theme === "storm") return { name: "Rainy Form", emoji: "🌧️" };
+  if (theme === "snow") return { name: "Snowy Form", emoji: "❄️" };
+  return { name: "Normal Form", emoji: "🌥️" };
+}
+
+// "Feels like" comfort breakdown: heat index / wind chill + a human descriptor.
+function comfortLine(c) {
+  const t = c.temperature_2m, feels = c.apparent_temperature, rh = c.relative_humidity_2m;
+  const imp = state.units === "imperial";
+  const hot = imp ? 80 : 27, cold = imp ? 50 : 10;
+  let driver = "", label = "";
+  if (t >= hot) {
+    driver = `Heat index ${r0(feels)}${tempU()}`;
+    label = rh >= 70 ? "Muggy & oppressive" : rh >= 50 ? "Warm & humid" : "Hot but dry";
+  } else if (t <= cold) {
+    driver = `Wind chill ${r0(feels)}${tempU()}`;
+    const w = c.wind_speed_10m;
+    label = t <= (imp ? 20 : -6) ? "Bitterly cold" : (w >= (imp ? 15 : 24) ? "Raw & windy" : "Crisp & cold");
+  } else {
+    const diff = feels - t;
+    label = Math.abs(diff) < (imp ? 2 : 1) ? "Comfortable" : diff > 0 ? "A touch warm" : "Pleasantly cool";
+    driver = `${rh}% humidity`;
+  }
+  return `<div class="comfort"><span class="comfort-dot"></span>${label} <span class="comfort-sub">· ${driver}</span></div>`;
+}
+
+// Animate a number from 0 → target for a premium "spin-up" feel.
+function countUp(el, target, ms) {
+  if (!el || target == null || isNaN(target)) return;
+  const start = performance.now();
+  const from = 0;
+  function frame(now) {
+    const t = Math.min(1, (now - start) / ms);
+    const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+    el.textContent = Math.round(from + (target - from) * eased);
+    if (t < 1) requestAnimationFrame(frame);
+    else el.textContent = target;
+  }
+  requestAnimationFrame(frame);
+}
+
+// --- Conditions gauges + stat strip ---------------------------------------
+const UV_COLORS = ["#a3e635", "#ffd45e", "#ff8a3d", "#ff4d4d", "#a13be0"];
+
+function renderTiles(f, air) {
+  const c = f.current;
+  const aq = air && air.current ? air.current : {};
+  const uv = hourlyNow(f, "uv_index");
+  const visM = c.visibility != null ? c.visibility : hourlyNow(f, "visibility");
+
+  // Gauges — the console centerpiece.
+  const gauges = [
+    compassGauge(c.wind_direction_10m, c.wind_speed_10m, windU(), c.wind_gusts_10m) +
+      `<div class="gauge-cap">Wind · ${compass(c.wind_direction_10m)}</div>`,
+    gauge({ value: c.relative_humidity_2m, min: 0, max: 100, unit: "%", label: "Humidity",
+      sub: c.dew_point_2m != null ? `dew ${r0(c.dew_point_2m)}°` : "", color: "#54d6c2" }),
+    gauge({ value: c.pressure_msl, min: 960, max: 1050, unit: "", decimals: 0, label: "Pressure",
+      sub: "hPa", color: "#9b8cff" }),
+    gauge({ value: uv, min: 0, max: 12, unit: "", decimals: 0, label: "UV index",
+      sub: uvLabel(uv), colors: UV_COLORS }),
+    gauge({ value: c.cloud_cover, min: 0, max: 100, unit: "%", label: "Cloud", color: "#7fb2ff" }),
+    gauge({ value: aq.us_aqi != null ? aq.us_aqi : aq.european_aqi, min: 0, max: aq.us_aqi != null ? 200 : 100,
+      unit: "", label: aq.us_aqi != null ? "US AQI" : "EU AQI",
+      sub: aq.pm2_5 != null ? `PM2.5 ${r1(aq.pm2_5)}` : "", colors: ["#7ed957", "#ffd45e", "#ff8a3d", "#ff4d4d"] }),
+  ];
+
+  // Compact secondary stats.
+  let vis = "–";
+  if (visM != null) {
+    const mi = visM / 1609, km = visM / 1000;
+    vis = state.units === "imperial" ? (mi >= 10 ? "10+ mi" : `${r1(mi)} mi`) : (km >= 16 ? "16+ km" : `${r1(km)} km`);
+  }
+  const stats = [
+    ["Feels like", `${r0(c.apparent_temperature)}°`],
+    ["Visibility", vis],
+    ["Precip now", `${r1(c.precipitation)} ${precU()}`],
+    ["Wind gust", `${r0(c.wind_gusts_10m)} ${windU()}`],
+  ];
+
+  $("tiles").innerHTML =
+    `<div class="gauge-grid">${gauges.map((g) => `<div class="gauge-cell">${g}</div>`).join("")}</div>` +
+    `<div class="statstrip">${stats.map((s) => `<div class="stat"><span class="sk">${s[0]}</span><span class="sv">${s[1]}</span></div>`).join("")}</div>`;
+}
+
+function hourlyNow(f, field) {
+  const h = f.hourly;
+  if (!h || !h[field]) return null;
+  const now = new Date();
+  let best = 0, bestDiff = Infinity;
+  for (let i = 0; i < h.time.length; i++) {
+    const diff = Math.abs(new Date(h.time[i]) - now);
+    if (diff < bestDiff) { bestDiff = diff; best = i; }
+  }
+  return h[field][best];
+}
+
+const uvLabel = (uv) => uv == null ? "" : uv < 3 ? "Low" : uv < 6 ? "Moderate" : uv < 8 ? "High" : uv < 11 ? "Very high" : "Extreme";
+
+// --- Hourly chart + strip -------------------------------------------------
+function renderHourly(f) {
+  const h = f.hourly;
+  // Start from current hour, show 48
+  const now = new Date();
+  let start = h.time.findIndex((t) => new Date(t) >= now);
+  if (start < 0) start = 0;
+  start = Math.max(0, start - 1);
+  const end = Math.min(h.time.length, start + 48);
+  const idx = [];
+  for (let i = start; i < end; i++) idx.push(i);
+
+  const labels = idx.map((i) => new Date(h.time[i]).toLocaleTimeString([], { hour: "numeric" }));
+  const temps = idx.map((i) => h.temperature_2m[i]);
+  const pop = idx.map((i) => h.precipitation_probability[i]);
+
+  const ctx = $("hourlyChart").getContext("2d");
+  if (chart) chart.destroy();
+  const grad = ctx.createLinearGradient(0, 0, 0, 200);
+  grad.addColorStop(0, "rgba(111,183,255,0.45)");
+  grad.addColorStop(1, "rgba(111,183,255,0)");
+
+  chart = new Chart(ctx, {
+    data: {
+      labels,
+      datasets: [
+        { type: "line", label: `Temp ${tempU()}`, data: temps, yAxisID: "y",
+          borderColor: "#ffd45e", backgroundColor: grad, fill: true, tension: 0.4,
+          pointRadius: 0, borderWidth: 2.5 },
+        { type: "bar", label: "Precip %", data: pop, yAxisID: "y1",
+          backgroundColor: "rgba(95,168,255,0.55)", borderRadius: 4, barPercentage: 0.6 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (c) => c.dataset.yAxisID === "y1"
+              ? `Precip ${r0(c.raw)}%` : `${r0(c.raw)}${tempU()}`,
+          },
+        },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: "rgba(238,242,251,0.5)", maxTicksLimit: 12 } },
+        y: { position: "left", grid: { color: "rgba(255,255,255,0.06)" },
+             ticks: { color: "rgba(238,242,251,0.5)", callback: (v) => `${v}°` } },
+        y1: { position: "right", min: 0, max: 100, grid: { display: false },
+              ticks: { color: "rgba(95,168,255,0.6)", callback: (v) => `${v}%` } },
+      },
+    },
+  });
+
+  // Icon strip (every 3 hours)
+  const strip = $("hourStrip");
+  strip.innerHTML = "";
+  for (let k = 0; k < idx.length; k += 3) {
+    const i = idx[k];
+    const el = document.createElement("div");
+    el.className = "hour";
+    const label = k === 0 ? "Now" : new Date(h.time[i]).toLocaleTimeString([], { hour: "numeric" });
+    el.innerHTML = `
+      <div class="t">${label}</div>
+      ${icon(h.weather_code[i], h.is_day[i])}
+      <div class="tp">${r0(h.temperature_2m[i])}°</div>
+      <div class="pp">${h.precipitation_probability[i] > 5 ? "💧" + r0(h.precipitation_probability[i]) + "%" : ""}</div>`;
+    strip.appendChild(el);
+  }
+}
+
+// --- Daily ----------------------------------------------------------------
+function renderDaily(f) {
+  const d = f.daily;
+  const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: f.timezone });
+  let start = d.time.indexOf(todayStr);
+  if (start < 0) start = 0;
+  const lows = [], highs = [];
+  for (let i = start; i < d.time.length; i++) { lows.push(d.temperature_2m_min[i]); highs.push(d.temperature_2m_max[i]); }
+  const gMin = Math.min(...lows), gMax = Math.max(...highs);
+  const span = Math.max(1, gMax - gMin);
+
+  const rows = [];
+  for (let i = start; i < d.time.length; i++) {
+    const date = new Date(d.time[i] + "T12:00:00");
+    const name = i === start ? "Today" : date.toLocaleDateString([], { weekday: "short" });
+    const sub = date.toLocaleDateString([], { month: "short", day: "numeric" });
+    const lo = d.temperature_2m_min[i], hi = d.temperature_2m_max[i];
+    const left = ((lo - gMin) / span) * 100;
+    const width = ((hi - lo) / span) * 100;
+    const pop = d.precipitation_probability_max ? d.precipitation_probability_max[i] : null;
+    rows.push(`
+      <div class="day">
+        <div class="dname">${name}<span class="sub">${sub}</span><span class="dcond">${describe(d.weather_code[i]).label}</span></div>
+        ${icon(d.weather_code[i], 1)}
+        <div class="barwrap">
+          <span class="lo">${r0(lo)}°</span>
+          <span class="track"><span class="fill" style="left:${left}%;width:${Math.max(6, width)}%"></span></span>
+          <span class="hi">${r0(hi)}°</span>
+        </div>
+        <div class="meta">
+          <span>${pop != null ? "💧 " + r0(pop) + "%" : ""}</span>
+          <span>🌬 ${r0(d.wind_speed_10m_max[i])}</span>
+          <span>☀ ${r0(d.uv_index_max[i])}</span>
+        </div>
+      </div>`);
+  }
+  $("days").innerHTML = rows.join("");
+}
+
+// --- Air quality ----------------------------------------------------------
+function aqiCategory(aqi, european) {
+  if (aqi == null) return { cat: "No data", color: "#888", desc: "" };
+  if (european) {
+    const t = [[20,"Good","#7ed957"],[40,"Fair","#b5e853"],[60,"Moderate","#ffd45e"],[80,"Poor","#ff8a5f"],[100,"Very poor","#ff5f5f"],[1e9,"Extremely poor","#a13be0"]];
+    const m = t.find((x) => aqi <= x[0]);
+    return { cat: m[1], color: m[2], desc: "European AQI scale (0–100+)." };
+  }
+  const t = [[50,"Good","#7ed957","Air quality is satisfactory; little or no risk."],
+    [100,"Moderate","#ffd45e","Acceptable; unusually sensitive people should consider limiting prolonged exertion."],
+    [150,"Unhealthy for sensitive","#ff8a5f","Sensitive groups may experience effects."],
+    [200,"Unhealthy","#ff5f5f","Everyone may begin to experience effects."],
+    [300,"Very unhealthy","#a13be0","Health alert: serious effects for everyone."],
+    [1e9,"Hazardous","#7e1f1f","Emergency conditions; entire population affected."]];
+  const m = t.find((x) => aqi <= x[0]);
+  return { cat: m[1], color: m[2], desc: m[3] };
+}
+
+function renderAirQuality(air, googlePollen) {
+  if (!air || !air.current) { $("aqiBody").innerHTML = `<p style="color:var(--muted)">No air-quality data for this location.</p>`; return; }
+  const c = air.current, u = air.current_units || {};
+  const useEU = c.us_aqi == null && c.european_aqi != null;
+  const aqi = useEU ? c.european_aqi : c.us_aqi;
+  const { cat, color, desc } = aqiCategory(aqi, useEU);
+  const max = useEU ? 100 : 300;
+  const pct = Math.min(1, (aqi || 0) / max);
+  const circ = 2 * Math.PI * 52;
+
+  const pollutants = [
+    ["PM2.5", c.pm2_5, "µg/m³"], ["PM10", c.pm10, "µg/m³"],
+    ["Ozone", c.ozone, "µg/m³"], ["NO₂", c.nitrogen_dioxide, "µg/m³"],
+    ["SO₂", c.sulphur_dioxide, "µg/m³"], ["CO", c.carbon_monoxide, "µg/m³"],
+  ].filter((p) => p[1] != null);
+
+  const pollen = [
+    ["Grass", c.grass_pollen], ["Birch", c.birch_pollen], ["Alder", c.alder_pollen],
+    ["Ragweed", c.ragweed_pollen], ["Olive", c.olive_pollen], ["Mugwort", c.mugwort_pollen],
+  ].filter((p) => p[1] != null && p[1] > 0);
+
+  $("aqiBody").innerHTML = `
+    <div class="aqi-head">
+      <div class="aqi-dial">
+        <svg viewBox="0 0 120 120" style="transform:rotate(-90deg)">
+          <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="10"/>
+          <circle cx="60" cy="60" r="52" fill="none" stroke="${color}" stroke-width="10" stroke-linecap="round"
+            stroke-dasharray="${circ}" stroke-dashoffset="${circ * (1 - pct)}"/>
+        </svg>
+        <div class="val"><div class="num" style="color:${color}">${r0(aqi)}</div><div class="lbl">${useEU ? "EU AQI" : "US AQI"}</div></div>
+      </div>
+      <div>
+        <div class="aqi-cat" style="color:${color}">${cat}</div>
+        <div class="aqi-desc">${desc}</div>
+      </div>
+    </div>
+    <div class="pollutants">
+      ${pollutants.map((p) => `<div class="poll"><div class="k">${p[0]}</div><div class="v">${r1(p[1])}</div><div class="u">${p[2]}</div></div>`).join("")}
+    </div>
+    ${pollenSection(googlePollen, pollen)}
+  `;
+}
+
+// Global pollen (Google) when a key is configured, else the Europe-only
+// values that come bundled in the air-quality response.
+function pollenSection(google, europe) {
+  if (google && google.enabled && google.types && google.types.length) {
+    const cells = google.types.map((p) => {
+      const col = p.color ? `rgb(${Math.round((p.color.red||0)*255)},${Math.round((p.color.green||0)*255)},${Math.round((p.color.blue||0)*255)})` : "var(--text)";
+      return `<div class="poll"><div class="k">${p.name}</div><div class="v" style="color:${p.value ? col : 'var(--faint)'}">${p.value != null ? p.value : "–"}</div><div class="u">${p.category || (p.in_season ? "in season" : "off season")}</div></div>`;
+    }).join("");
+    return `<h2 style="margin-top:18px">Pollen <span style="font-weight:400;text-transform:none;letter-spacing:0">(Google, index 0–5)</span></h2><div class="pollutants">${cells}</div>`;
+  }
+  if (europe && europe.length) {
+    return `<h2 style="margin-top:18px">Pollen <span style="font-weight:400;text-transform:none;letter-spacing:0">(grains/m³, Europe)</span></h2>
+      <div class="pollutants">${europe.map((p) => `<div class="poll"><div class="k">${p[0]}</div><div class="v">${r0(p[1])}</div><div class="u">grains/m³</div></div>`).join("")}</div>`;
+  }
+  return "";
+}
+
+// Moon phase from date (synodic month from a known new moon).
+function moonPhase(date) {
+  const KNOWN_NEW = Date.UTC(2000, 0, 6, 18, 14) / 1000; // 2000-01-06 new moon
+  const SYN = 29.530588853 * 86400;
+  let age = (((date.getTime() / 1000) - KNOWN_NEW) % SYN + SYN) % SYN;
+  const frac = age / SYN; // 0..1
+  const illum = Math.round((1 - Math.cos(frac * 2 * Math.PI)) / 2 * 100);
+  const phases = [
+    [0.03, "New moon", "🌑"], [0.22, "Waxing crescent", "🌒"], [0.28, "First quarter", "🌓"],
+    [0.47, "Waxing gibbous", "🌔"], [0.53, "Full moon", "🌕"], [0.72, "Waning gibbous", "🌖"],
+    [0.78, "Last quarter", "🌗"], [0.97, "Waning crescent", "🌘"], [1.01, "New moon", "🌑"],
+  ];
+  const p = phases.find((x) => frac < x[0]) || phases[phases.length - 1];
+  return { name: p[1], emoji: p[2], illum };
+}
+
+// --- Sun arc --------------------------------------------------------------
+function renderSun(f) {
+  const d = f.daily;
+  const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: f.timezone });
+  let i = d.time.indexOf(todayStr);
+  if (i < 0) i = 1;
+  const rise = new Date(d.sunrise[i]);
+  const set = new Date(d.sunset[i]);
+  const now = new Date();
+  const t = (set - rise) > 0 ? Math.min(1, Math.max(0, (now - rise) / (set - rise))) : 0;
+  const ax = 20 + t * 200;
+  const ay = 100 - Math.sin(t * Math.PI) * 80;
+  const fmt = (dt) => dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const dayLenMin = Math.round((set - rise) / 60000);
+  const h = Math.floor(dayLenMin / 60), m = dayLenMin % 60;
+
+  // Daylight change vs yesterday (index i-1, which exists because past_days=1).
+  let deltaStr = "";
+  if (i > 0 && d.sunrise[i - 1] && d.sunset[i - 1]) {
+    const ySec = (new Date(d.sunset[i - 1]) - new Date(d.sunrise[i - 1])) / 1000;
+    const tSec = (set - rise) / 1000;
+    const diff = Math.round(tSec - ySec);
+    const sign = diff >= 0 ? "+" : "−";
+    const am = Math.abs(diff);
+    deltaStr = `${sign}${Math.floor(am / 60)}m ${am % 60}s`;
+  }
+  // Golden hour ≈ within ~50 min of sunrise/sunset.
+  const GH = 50 * 60000;
+  const ghEve = `${fmt(new Date(set - GH))}–${fmt(set)}`;
+  const moon = moonPhase(now);
+
+  $("sunCard").innerHTML = `
+    <svg class="sun-arc" viewBox="0 0 240 110">
+      <defs><linearGradient id="ghg" x1="0" x2="1"><stop offset="0" stop-color="#ffd45e"/><stop offset="1" stop-color="#ff8a5f"/></linearGradient></defs>
+      <path d="M20 100 A 100 100 0 0 1 220 100" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="2" stroke-dasharray="4 5"/>
+      <line x1="20" y1="100" x2="220" y2="100" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+      ${t > 0 && t < 1 ? `<circle cx="${ax.toFixed(1)}" cy="${ay.toFixed(1)}" r="7" fill="url(#ghg)"/>
+        <circle cx="${ax.toFixed(1)}" cy="${ay.toFixed(1)}" r="13" fill="#ffd45e" opacity="0.22"/>` : ""}
+    </svg>
+    <div class="sun-times">
+      <div><div class="k">Sunrise</div><div class="v">${fmt(rise)}</div></div>
+      <div><div class="k">Sunset</div><div class="v">${fmt(set)}</div></div>
+      <div><div class="k">Daylight</div><div class="v">${h}h ${m}m</div>${deltaStr ? `<div class="k" style="color:var(--accent)">${deltaStr} vs yest.</div>` : ""}</div>
+    </div>
+    <div class="sun-extra">
+      <div><div class="k">🌇 Golden hour</div><div class="v2">${ghEve}</div></div>
+      <div><div class="k">${moon.emoji} ${moon.name}</div><div class="v2">${moon.illum}% lit</div></div>
+    </div>`;
+}
+
+// --- Marine conditions ----------------------------------------------------
+function renderMarine(marine) {
+  const card = $("marineCard");
+  if (!card) return;
+  if (!marine || !marine.available || !marine.current) { card.classList.add("hidden"); return; }
+  card.classList.remove("hidden");
+  const c = marine.current, u = marine.units || {};
+  const imp = state.units === "imperial";
+  const toLen = (m) => m == null ? "–" : imp ? `${r1(m * 3.281)} <span class="x">ft</span>` : `${r1(m)} <span class="x">m</span>`;
+  const tiles = [
+    { k: "Wave height", v: toLen(c.wave_height), x: c.wave_direction != null ? `${compass(c.wave_direction)} · ${r0(c.wave_period)}s` : "" },
+    { k: "Swell", v: toLen(c.swell_wave_height), x: c.swell_wave_period != null ? `period ${r0(c.swell_wave_period)}s` : "" },
+    { k: "Wind waves", v: toLen(c.wind_wave_height), x: "" },
+    { k: "Sea temp", v: c.sea_surface_temperature != null ? `${r0(c.sea_surface_temperature)}<span class="x">${tempU()}</span>` : "–", x: "surface" },
+  ];
+  $("marineBody").innerHTML = tiles.map((t) =>
+    `<div class="tile"><div class="k">${t.k}</div><div class="v">${t.v}</div><div class="x">${t.x}</div></div>`).join("");
+}
+
+// --- Alerts ---------------------------------------------------------------
+function renderAlerts(alerts) {
+  const box = $("alerts");
+  if (!alerts || !alerts.length) { box.innerHTML = ""; return; }
+  box.innerHTML = alerts.map((a) => `
+    <div class="alert ${a.severity || ""} fade-in">
+      <div class="ev">⚠ ${a.event}${a.severity ? ` · ${a.severity}` : ""}</div>
+      <div class="hl">${a.headline || ""}</div>
+      ${a.description ? `<details><summary>Details${a.expires ? ` · until ${new Date(a.expires).toLocaleString()}` : ""}</summary>
+        <div class="desc">${(a.description || "").trim()}${a.instruction ? "\n\nINSTRUCTIONS:\n" + a.instruction.trim() : ""}</div></details>` : ""}
+    </div>`).join("");
+}
+
+// --- Nowcast banner (next ~2h precipitation) ------------------------------
+function renderNowcast(f) {
+  const box = $("nowcast");
+  const m = f.minutely_15;
+  if (!m || !m.precipitation || !m.time) { box.classList.add("hidden"); return; }
+  const now = Date.now();
+  let i0 = m.time.findIndex((t) => new Date(t).getTime() >= now);
+  if (i0 < 0) { box.classList.add("hidden"); return; }
+  const thr = state.units === "imperial" ? 0.004 : 0.1; // ~trace, per step
+  const horizon = 8; // 8 × 15min = 2h
+  const steps = [];
+  for (let i = i0; i < Math.min(m.time.length, i0 + horizon + 1); i++) {
+    steps.push({ t: new Date(m.time[i]).getTime(), p: m.precipitation[i] });
+  }
+  const wet = (p) => p != null && p > thr;
+  const nowWet = wet(steps[0].p);
+  let trans = null;
+  for (let k = 1; k < steps.length; k++) {
+    if (wet(steps[k].p) !== nowWet) { trans = steps[k]; break; }
+  }
+  const mins = (t) => Math.max(0, Math.round((t - now) / 60000 / 5) * 5);
+  const peak = Math.max(...steps.map((s) => s.p || 0));
+  const intensity = peak > (state.units === "imperial" ? 0.1 : 2.5) ? "heavy"
+    : peak > (state.units === "imperial" ? 0.02 : 0.5) ? "moderate" : "light";
+
+  let icon = "🌦️", cls = "nowcast", title = "", sub = "";
+  if (nowWet && trans) {
+    icon = "🌧️"; const mm = mins(trans.t);
+    title = mm <= 5 ? "Rain stopping shortly" : `Rain easing in ~${mm} min`;
+    sub = "Then dry for a while.";
+  } else if (nowWet && !trans) {
+    icon = "🌧️"; title = `${intensity[0].toUpperCase() + intensity.slice(1)} rain continuing`;
+    sub = "Expected to keep up over the next 2 hours.";
+  } else if (!nowWet && trans) {
+    icon = "🌦️"; const mm = mins(trans.t);
+    title = mm <= 5 ? "Rain starting any minute" : `Rain starting in ~${mm} min`;
+    sub = `${intensity[0].toUpperCase() + intensity.slice(1)} precipitation moving in.`;
+  } else {
+    icon = "☀️"; cls = "nowcast dry"; title = "No rain in the next 2 hours";
+    sub = "Skies look clear of precipitation for now.";
+  }
+  box.className = cls;
+  box.innerHTML = `<span class="nc-icon">${icon}</span><span>${title}<br><span class="nc-sub">${sub}</span></span>`;
+}
+
+// --- Historical reference -------------------------------------------------
+async function loadHistory(place, todayHigh, todayLow) {
+  const sum = $("historySummary");
+  sum.innerHTML = `<div class="hstat"><div class="k">Historical</div><div class="x">Loading climate reference…</div></div>`;
+  try {
+    const res = await fetch(`/api/history?lat=${place.lat}&lon=${place.lon}&units=${state.units}`);
+    const h = await res.json();
+    if (h.error || !h.normals) throw new Error("no data");
+    renderHistory(h, todayHigh, todayLow);
+  } catch (e) {
+    sum.innerHTML = `<div class="hstat"><div class="k">Historical</div><div class="x">Reference data unavailable for this location.</div></div>`;
+    if (histChart) { histChart.destroy(); histChart = null; }
+  }
+}
+
+function renderHistory(h, todayHigh, todayLow) {
+  const n = h.normals;
+  $("historySub").textContent = `${n.years}-yr climate normal`;
+  const delta = (todayHigh != null && n.high != null) ? todayHigh - n.high : null;
+  const dCls = delta == null ? "" : delta >= 0.5 ? "delta-warm" : delta <= -0.5 ? "delta-cool" : "";
+  const dTxt = delta == null ? "–" : `${delta >= 0 ? "+" : ""}${r0(delta)}°`;
+  $("historySummary").innerHTML = `
+    <div class="hstat"><div class="k">Normal high / low</div><div class="v">${r0(n.high)}° / ${r0(n.low)}°</div><div class="x">avg for this date</div></div>
+    <div class="hstat ${dCls}"><div class="k">Today vs normal</div><div class="v">${dTxt}</div><div class="x">${delta == null ? "" : delta >= 0.5 ? "warmer than usual" : delta <= -0.5 ? "cooler than usual" : "right about normal"}</div></div>
+    <div class="hstat"><div class="k">Record high</div><div class="v">${r0(n.record_high)}°</div><div class="x">set ${n.record_high_year || "–"}</div></div>
+    <div class="hstat"><div class="k">Record low</div><div class="v">${r0(n.record_low)}°</div><div class="x">set ${n.record_low_year || "–"}</div></div>`;
+
+  // "This day in history" facts line.
+  const facts = [];
+  if (n.last_year_high != null) facts.push(`One year ago today it reached <b>${r0(n.last_year_high)}°</b> / ${r0(n.last_year_low)}°.`);
+  if (n.record_high != null) facts.push(`The hottest this date ever got was <b>${r0(n.record_high)}°</b> in ${n.record_high_year}.`);
+  if (n.wettest != null && n.wettest > 0) facts.push(`Wettest on record: <b>${r1(n.wettest)} ${precU()}</b> (${n.wettest_year}).`);
+  const factsEl = $("historyFacts");
+  if (factsEl) factsEl.innerHTML = facts.length ? `📅 ${facts.join(" ")}` : "";
+
+  const rec = h.recent;
+  const labels = rec.time.map((t) => new Date(t + "T12:00:00").toLocaleDateString([], { month: "short", day: "numeric" }));
+  const ctx = $("historyChart").getContext("2d");
+  if (histChart) histChart.destroy();
+  const nHigh = rec.time.map(() => n.high);
+  const nLow = rec.time.map(() => n.low);
+  histChart = new Chart(ctx, {
+    data: {
+      labels,
+      datasets: [
+        { type: "line", label: "High", data: rec.tmax, borderColor: "#ff8a5f", backgroundColor: "rgba(255,138,95,0.08)", fill: false, tension: 0.35, pointRadius: 0, borderWidth: 2.5 },
+        { type: "line", label: "Low", data: rec.tmin, borderColor: "#6fb7ff", backgroundColor: "rgba(111,183,255,0.08)", fill: false, tension: 0.35, pointRadius: 0, borderWidth: 2.5 },
+        { type: "line", label: "Normal high", data: nHigh, borderColor: "rgba(255,138,95,0.5)", borderDash: [5, 5], pointRadius: 0, borderWidth: 1.5 },
+        { type: "line", label: "Normal low", data: nLow, borderColor: "rgba(111,183,255,0.5)", borderDash: [5, 5], pointRadius: 0, borderWidth: 1.5 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: true, position: "bottom", labels: { color: "rgba(238,242,251,0.6)", boxWidth: 12, padding: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${r0(c.raw)}${tempU()}` } },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: "rgba(238,242,251,0.5)", maxTicksLimit: 10 } },
+        y: { grid: { color: "rgba(255,255,255,0.06)" }, ticks: { color: "rgba(238,242,251,0.5)", callback: (v) => `${v}°` } },
+      },
+    },
+  });
+}
+
+// --- Rain overlay ---------------------------------------------------------
+function toggleRain(on) {
+  const fx = $("rainFx");
+  if (on && !fx.dataset.built) {
+    let html = "";
+    for (let i = 0; i < 60; i++) {
+      const left = Math.random() * 100;
+      const dur = 0.6 + Math.random() * 0.8;
+      const delay = Math.random() * 2;
+      html += `<i style="left:${left}%;animation-duration:${dur}s;animation-delay:${delay}s"></i>`;
+    }
+    fx.innerHTML = html;
+    fx.dataset.built = "1";
+  }
+  fx.classList.toggle("on", on);
+}
+
+// --- Favorites (saved locations) ------------------------------------------
+const placeKey = (p) => `${p.lat.toFixed(2)},${p.lon.toFixed(2)}`;
+
+function isFavorite(p) {
+  return state.favorites.some((q) => placeKey(q) === placeKey(p));
+}
+
+function toggleFavorite() {
+  if (!state.place) return;
+  const k = placeKey(state.place);
+  if (isFavorite(state.place)) {
+    state.favorites = state.favorites.filter((q) => placeKey(q) !== k);
+  } else {
+    state.favorites.push({
+      name: state.place.name, admin1: state.place.admin1, country: state.place.country,
+      country_code: state.place.country_code, lat: state.place.lat, lon: state.place.lon,
+    });
+  }
+  localStorage.setItem("favorites", JSON.stringify(state.favorites));
+  renderFavorites();
+}
+
+function renderFavorites() {
+  const bar = $("favBar");
+  if (!bar) return;
+  const star = $("starBtn");
+  if (star) {
+    const on = state.place && isFavorite(state.place);
+    star.textContent = on ? "★" : "☆";
+    star.classList.toggle("active", !!on);
+    star.title = on ? "Remove from favorites" : "Save this location";
+  }
+  bar.innerHTML = state.favorites.map((p, i) => {
+    const active = state.place && placeKey(p) === placeKey(state.place);
+    return `<button class="fav-chip ${active ? "active" : ""}" data-i="${i}">${p.name}<span class="fav-x" data-x="${i}">×</span></button>`;
+  }).join("");
+  bar.querySelectorAll(".fav-chip").forEach((b) => {
+    b.onclick = (e) => {
+      if (e.target.classList.contains("fav-x")) {
+        state.favorites.splice(+e.target.dataset.x, 1);
+        localStorage.setItem("favorites", JSON.stringify(state.favorites));
+        renderFavorites();
+      } else {
+        loadWeather(state.favorites[+b.dataset.i]);
+      }
+    };
+  });
+  bar.classList.toggle("hidden", state.favorites.length === 0);
+}
+
+// --- Click-to-pick on the radar map ---------------------------------------
+async function onMapPick(lat, lon) {
+  let info = {};
+  try { info = await (await fetch(`/api/reverse?lat=${lat}&lon=${lon}`)).json(); } catch (e) {}
+  loadWeather({
+    name: info.name || "Pinned point", admin1: info.admin1, country: info.country,
+    country_code: info.country_code, lat, lon,
+  });
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// --- Compare a second city ------------------------------------------------
+function setupCompare() {
+  const input = $("compareInput");
+  const box = $("compareResults");
+  if (!input) return;
+  let timer;
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (q.length < 2) { box.innerHTML = ""; return; }
+    timer = setTimeout(async () => {
+      try {
+        const data = await (await fetch(`/api/geocode?q=${encodeURIComponent(q)}`)).json();
+        box.innerHTML = "";
+        (data.results || []).forEach((p) => {
+          const btn = document.createElement("button");
+          btn.innerHTML = `<span>${p.name}</span><span class="sub">${[p.admin1, p.country].filter(Boolean).join(", ")}</span>`;
+          btn.onclick = () => {
+            input.value = ""; box.innerHTML = "";
+            loadCompare({ name: p.name, country_code: p.country_code, lat: p.latitude, lon: p.longitude });
+          };
+          box.appendChild(btn);
+        });
+      } catch (e) {}
+    }, 280);
+  });
+}
+
+async function loadCompare(place) {
+  const panel = $("comparePanel");
+  panel.classList.remove("hidden");
+  const a = state.place;
+  let da = state.lastData;
+  if (!da) {
+    da = await fetch(`/api/weather?lat=${a.lat}&lon=${a.lon}&units=${state.units}&compact=1`).then((r) => r.json());
+  }
+  const wireClose = () => $("compareClose")?.addEventListener("click", () => panel.classList.add("hidden"));
+  // Render city A instantly (already loaded); city B shows a spinner while it fetches.
+  panel.innerHTML = compareHtml(a, da) + `<div class="cmp-vs">vs</div>` +
+    `<div class="cmp-col"><button class="cmp-close btn" id="compareClose">×</button>` +
+    `<div class="cmp-name">${place.name}</div><div class="cmp-loading"><div class="spinner"></div></div></div>`;
+  wireClose();
+  try {
+    const db = await fetch(
+      `/api/weather?lat=${place.lat}&lon=${place.lon}&units=${state.units}&compact=1`
+    ).then((r) => r.json());
+    if (db.error || !db.forecast) throw new Error(db.detail || "no data");
+    panel.innerHTML = compareHtml(a, da) + `<div class="cmp-vs">vs</div>` + compareHtml(place, db, true);
+    wireClose();
+  } catch (e) {
+    panel.innerHTML = compareHtml(a, da) + `<div class="cmp-vs">vs</div>` +
+      `<div class="cmp-col"><button class="cmp-close btn" id="compareClose">×</button>` +
+      `<div class="cmp-name">${place.name}</div><div class="cmp-loading">Couldn't load.</div></div>`;
+    wireClose();
+  }
+}
+
+function compareHtml(place, data, showClose) {
+  const c = data.forecast.current;
+  const aq = data.air_quality && data.air_quality.current ? data.air_quality.current : {};
+  const m = describe(c.weather_code);
+  return `<div class="cmp-col">
+    ${showClose ? '<button class="cmp-close btn" id="compareClose">×</button>' : ""}
+    <div class="cmp-name">${place.name}</div>
+    <div class="cmp-row">${icon(c.weather_code, c.is_day)}<div class="cmp-temp">${r0(c.temperature_2m)}°</div></div>
+    <div class="cmp-cond">${m.label}</div>
+    <div class="cmp-stats">
+      <span>Feels ${r0(c.apparent_temperature)}°</span>
+      <span>💧 ${r0(c.relative_humidity_2m)}%</span>
+      <span>🌬 ${r0(c.wind_speed_10m)} ${windU()}</span>
+      <span>AQI ${aq.us_aqi != null ? r0(aq.us_aqi) : (aq.european_aqi != null ? r0(aq.european_aqi) : "–")}</span>
+    </div></div>`;
+}
+
+// --- Desktop notifications ------------------------------------------------
+let lastNotified = "";
+function setupNotifications() {
+  const btn = $("notifyBtn");
+  if (!btn) return;
+  const sync = () => {
+    const granted = "Notification" in window && Notification.permission === "granted";
+    btn.textContent = granted ? "🔔 Alerts on" : "🔕 Alerts";
+    btn.classList.toggle("active", granted);
+  };
+  btn.onclick = async () => {
+    if (!("Notification" in window)) { alert("This browser doesn't support notifications."); return; }
+    if (Notification.permission !== "granted") await Notification.requestPermission();
+    sync();
+  };
+  sync();
+}
+
+function maybeNotify(place, f, alerts) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const fire = (title, body, tag) => {
+    if (lastNotified === tag) return;
+    lastNotified = tag;
+    try { new Notification(title, { body, tag }); } catch (e) {}
+  };
+  // Severe-weather alert.
+  if (alerts && alerts.length) {
+    fire(`⚠ ${alerts[0].event} — ${place.name}`, alerts[0].headline || "", "alert:" + (alerts[0].event || "") + place.name);
+    return;
+  }
+  // Imminent rain from the 15-min nowcast.
+  const m = f.minutely_15;
+  if (m && m.precipitation) {
+    const now = Date.now();
+    let i0 = m.time.findIndex((t) => new Date(t).getTime() >= now);
+    if (i0 >= 0) {
+      const thr = state.units === "imperial" ? 0.004 : 0.1;
+      const dryNow = !(m.precipitation[i0] > thr);
+      for (let k = i0; k < Math.min(m.time.length, i0 + 8); k++) {
+        if (dryNow && m.precipitation[k] > thr) {
+          const mins = Math.round((new Date(m.time[k]).getTime() - now) / 60000);
+          fire(`🌧️ Rain soon — ${place.name}`, `Precipitation starting in about ${mins} min.`, `rain:${place.name}:${m.time[k]}`);
+          break;
+        }
+      }
+    }
+  }
+}
+
+// --- Auto-refresh ---------------------------------------------------------
+function pulseUpdated() {
+  const t = $("updateToast");
+  if (!t) return;
+  t.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+function scheduleRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(() => { if (state.place && !document.hidden) loadWeather(state.place, true); }, 10 * 60 * 1000);
+}
+
+boot();

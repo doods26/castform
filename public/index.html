@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Castform · weather, evolved</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%23fff' stroke='%23111' stroke-width='6'/%3E%3Cpath d='M4 50a46 46 0 0 1 92 0z' fill='%23ff4d4d'/%3E%3Cline x1='4' y1='50' x2='96' y2='50' stroke='%23111' stroke-width='6'/%3E%3Ccircle cx='50' cy='50' r='13' fill='%23fff' stroke='%23111' stroke-width='6'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/vendor/leaflet.css" />
+  <link rel="stylesheet" href="/css/styles.css" />
+  <script src="/js/chart.umd.min.js"></script>
+  <script src="/vendor/leaflet.js"></script>
+</head>
+<body data-theme="cloudy">
+  <div class="sky-layer"></div>
+  <div class="stars" id="stars"></div>
+  <div class="cloud-fx" id="cloudFx"></div>
+  <div class="rain-fx" id="rainFx"></div>
+  <div class="snow-fx" id="snowFx"></div>
+  <div class="lightning" id="lightning"></div>
+  <div class="update-toast" id="updateToast"></div>
+
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <svg class="logo" viewBox="0 0 52 52"><circle cx="20" cy="20" r="8" fill="#ffd45e"/><path d="M16 40a9 9 0 0 1 .6-17.9A13 13 0 0 1 41 23a8 8 0 0 1-1 17z" fill="#e8eefc"/></svg>
+        <span class="brand-name">Castform<span class="brand-tag">weather, evolved</span></span>
+      </div>
+      <div class="search">
+        <input id="searchInput" type="text" placeholder="Search city…  (e.g. Austin, London, Tokyo)" autocomplete="off" />
+        <div class="results" id="searchResults"></div>
+      </div>
+      <div class="toolbar">
+        <button class="btn icon-btn" id="starBtn" title="Save this location">☆</button>
+        <button class="btn" id="geoBtn" title="Use my location">📍</button>
+        <button class="btn" id="notifyBtn" title="Weather alerts">🔕 Alerts</button>
+        <button class="btn" id="fullscreenBtn" title="Fullscreen kiosk mode">⛶ Kiosk</button>
+        <div class="unit-toggle" id="unitToggle">
+          <button data-units="imperial" class="active">°F</button>
+          <button data-units="metric">°C</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="fav-bar hidden" id="favBar"></div>
+
+    <div id="alerts"></div>
+    <div id="nowcast" class="nowcast hidden"></div>
+
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <div id="loadingText">Loading weather…</div>
+    </div>
+
+    <main id="content" class="grid hidden">
+      <!-- Hero: current conditions -->
+      <section class="card current sp5" id="currentCard"></section>
+
+      <!-- Conditions console: gauges -->
+      <section class="card sp7 cond-card">
+        <h2><span class="h2-ico">📊</span>Conditions now</h2>
+        <div id="tiles"></div>
+      </section>
+
+      <!-- Radar time-lapse -->
+      <section class="card radar-card sp7">
+        <div class="radar-head">
+          <h2><span class="h2-ico">📡</span>Radar · storms moving in</h2>
+          <div class="radar-head-right">
+            <div class="unit-toggle radar-mode" id="radarMode">
+              <button data-mode="radar" class="active">Radar</button>
+              <button data-mode="satellite">Satellite</button>
+            </div>
+            <div class="radar-frame-label" id="radarFrameLabel"></div>
+          </div>
+        </div>
+        <div class="radar-map-wrap">
+          <div id="radarMap"></div>
+          <div class="radar-legend">
+            <span>Light</span>
+            <i class="radar-gradient"></i>
+            <span>Heavy</span>
+          </div>
+          <div class="radar-loading" id="radarLoading"><div class="spinner"></div></div>
+        </div>
+        <div class="radar-controls">
+          <button class="btn radar-play" id="radarPlay" title="Play / pause">▶</button>
+          <input type="range" id="radarScrub" class="radar-scrub" min="0" max="0" value="0" step="1" />
+          <div class="radar-speed">
+            <button class="btn" id="radarSpeed" title="Playback speed">1×</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Hourly -->
+      <section class="card hourly-wrap sp5">
+        <h2><span class="h2-ico">📈</span>Next 48 hours</h2>
+        <div class="chart-box"><canvas id="hourlyChart"></canvas></div>
+        <div class="hour-strip" id="hourStrip"></div>
+      </section>
+
+      <!-- Daily -->
+      <section class="card sp6">
+        <h2><span class="h2-ico">🗓️</span>7-day forecast</h2>
+        <div class="days" id="days"></div>
+      </section>
+
+      <!-- Historical reference -->
+      <section class="card history-card sp6">
+        <div class="radar-head">
+          <h2><span class="h2-ico">📅</span>Historical reference · this date</h2>
+          <div class="radar-frame-label" id="historySub"></div>
+        </div>
+        <div id="historySummary" class="history-summary"></div>
+        <div id="historyFacts" class="history-facts"></div>
+        <div class="chart-box history-chart"><canvas id="historyChart"></canvas></div>
+        <div class="history-note">Last 35 days of daily highs &amp; lows vs the climate normal band. Normals &amp; records from ~10 years of ERA5 reanalysis.</div>
+      </section>
+
+      <!-- Marine (coastal locations only) -->
+      <section class="card marine-card hidden sp6" id="marineCard">
+        <h2>🌊 Marine &amp; surf</h2>
+        <div class="tiles" id="marineBody"></div>
+      </section>
+
+      <!-- Air quality + Sun -->
+      <section class="card sp6" id="aqiCard"><h2><span class="h2-ico">🍃</span>Air quality</h2><div id="aqiBody"></div></section>
+      <section class="card sp6"><h2><span class="h2-ico">🌅</span>Sun &amp; daylight</h2><div class="sun-card" id="sunCard"></div></section>
+
+      <!-- Compare two cities -->
+      <section class="card compare-card">
+        <div class="radar-head">
+          <h2><span class="h2-ico">🆚</span>Compare with another city</h2>
+          <div class="search compare-search">
+            <input id="compareInput" type="text" placeholder="Add a city to compare…" autocomplete="off" />
+            <div class="results" id="compareResults"></div>
+          </div>
+        </div>
+        <div class="compare-panel hidden" id="comparePanel"></div>
+      </section>
+
+      <div class="foot" id="foot"></div>
+    </main>
+  </div>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

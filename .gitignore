@@ -1,0 +1,19 @@
+# Secrets / local config (Google Pollen key etc.) — never commit
+config.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Reference assets (downloaded, not part of source)
+_refs/
+
+# Generated build copies served by the dev server (regenerate via build_standalone.py)
+public/standalone.html
+public/standalone-embed.html
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp

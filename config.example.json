@@ -1,0 +1,4 @@
+{
+  "_comment": "Copy this file to config.json and add your key to enable global pollen. Everything else works without it.",
+  "google_pollen_key": ""
+}
