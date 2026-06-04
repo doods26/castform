@@ -521,6 +521,70 @@ body.radar-fs-open { overflow: hidden; }
 @keyframes drop { to { transform: translateY(120vh); } }
 
 /* ============================================================
+   New features: story, vs-yesterday, inline precip, live favs, settings
+   ============================================================ */
+
+/* Today story + vs-yesterday/tip (hero) */
+.daystory { font-size: 0.9rem; color: var(--muted); line-height: 1.5; margin-top: 12px;
+  padding-top: 12px; border-top: 1px solid var(--stroke); }
+.vsy { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.vsy-d { font-size: 0.86rem; color: var(--text); font-weight: 600; }
+.vsy-tip { font-size: 0.8rem; font-weight: 600; color: var(--amber);
+  background: rgba(255,166,43,0.12); border: 1px solid rgba(255,166,43,0.3);
+  padding: 3px 10px; border-radius: 999px; }
+
+/* Inline 7-day precip-probability bar */
+.day .dprecip { grid-column: 1 / -1; display: flex; gap: 1px; height: 5px; margin-top: 4px;
+  border-radius: 3px; overflow: hidden; background: rgba(255,255,255,0.05); }
+.day .dprecip i { flex: 1; background: #5fa8ff; opacity: var(--a, 0); }
+.dd-story { font-weight: 600; color: var(--text); margin: 0 0 8px; font-size: 0.9rem; }
+
+/* Live favorite chips */
+.fav-chip { user-select: none; }
+.fav-chip.dragging { opacity: 0.5; }
+.fav-ico { display: inline-flex; }
+.fav-ico .wxicon { width: 20px; height: 20px; }
+.fav-temp { font-weight: 700; color: var(--text); }
+.fav-chip .fav-name { font-weight: 500; }
+
+/* Settings overlay + panel */
+.settings-overlay { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center;
+  justify-content: center; padding: 20px; background: rgba(6,10,20,0.6); backdrop-filter: blur(6px);
+  animation: fadeIn .2s ease both; }
+.settings-overlay.hidden { display: none; }
+.settings-panel { width: 100%; max-width: 460px; max-height: 88vh; overflow-y: auto;
+  background: linear-gradient(180deg, #1a2740, #121b30); border: 1px solid var(--stroke);
+  border-radius: 20px; box-shadow: var(--shadow); padding: 18px 20px 20px; }
+.settings-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.settings-head h2 { font-size: 1.1rem; font-weight: 700; color: var(--text); margin: 0; text-transform: none; letter-spacing: 0; }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 13px 0; border-bottom: 1px solid var(--stroke); }
+.set-row:last-child { border-bottom: 0; }
+.set-row > label { font-weight: 600; color: var(--text); display: flex; flex-direction: column; gap: 2px; }
+.set-hint { font-size: 0.72rem; color: var(--faint); font-weight: 500; }
+.set-seg { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; border-radius: 11px;
+  overflow: hidden; border: 1px solid var(--stroke); background: var(--glass); }
+.set-seg button { padding: 7px 11px; background: none; border: none; color: var(--muted);
+  cursor: pointer; font-size: 0.82rem; font-weight: 600; }
+.set-seg button.active { background: var(--accent); color: #06203f; }
+.set-toggle { width: 46px; height: 26px; border-radius: 999px; border: 1px solid var(--stroke);
+  background: rgba(255,255,255,0.08); position: relative; cursor: pointer; flex: 0 0 auto; transition: background .2s; }
+.set-toggle span { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; transition: transform .2s; }
+.set-toggle.on { background: var(--accent); }
+.set-toggle.on span { transform: translateX(20px); }
+.set-startup { display: flex; gap: 8px; }
+.btn.sm { padding: 7px 11px; font-size: 0.82rem; }
+.settings-foot { text-align: center; color: var(--faint); font-size: 0.72rem; margin-top: 14px; }
+
+/* Reduce-motion (settings toggle) — calmer UI */
+.reduce-motion *, .reduce-motion *::before, .reduce-motion *::after {
+  animation-duration: .001s !important; animation-iteration-count: 1 !important;
+  transition-duration: .001s !important; }
+.reduce-motion .cloud-fx, .reduce-motion .snow-fx, .reduce-motion .rain-fx,
+.reduce-motion .sky-layer::before, .reduce-motion .sky-layer::after { display: none; }
+
+/* ============================================================
    Adaptive / mobile layout
    ============================================================ */
 
@@ -564,6 +628,13 @@ body.radar-fs-open { overflow: hidden; }
 
   /* Sun arc must not overflow the narrow card */
   .sun-arc { width: 100%; max-width: 240px; }
+
+  /* Settings panel: let rows wrap so segmented controls don't overflow */
+  .settings-overlay { padding: 12px; align-items: flex-end; }
+  .settings-panel { max-height: 92vh; border-radius: 18px; }
+  .set-row { flex-wrap: wrap; gap: 8px; }
+  .set-row > label { flex: 1 1 100%; }
+  .set-seg { justify-content: flex-start; }
 }
 
 /* Small phones (iPhone mini / SE width) */

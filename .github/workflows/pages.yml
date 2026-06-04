@@ -37,11 +37,17 @@ jobs:
       - name: Build standalone app
         run: python build_standalone.py
 
-      - name: Assemble site (standalone -> index.html)
+      - name: Generate PWA icons
+        run: python make_icons.py
+
+      - name: Assemble site (standalone -> index.html + PWA assets)
         run: |
           mkdir -p _site
           cp standalone.html _site/index.html
           cp standalone.html _site/standalone.html
+          cp public/manifest.json _site/manifest.json
+          cp public/sw.js _site/sw.js
+          cp public/icon-192.png public/icon-512.png public/icon-maskable-512.png public/apple-touch-icon.png _site/
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

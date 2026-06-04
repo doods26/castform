@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Castform · weather, evolved</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%23fff' stroke='%23111' stroke-width='6'/%3E%3Cpath d='M4 50a46 46 0 0 1 92 0z' fill='%23ff4d4d'/%3E%3Cline x1='4' y1='50' x2='96' y2='50' stroke='%23111' stroke-width='6'/%3E%3Ccircle cx='50' cy='50' r='13' fill='%23fff' stroke='%23111' stroke-width='6'/%3E%3C/svg%3E" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#16233f" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Castform" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="stylesheet" href="/vendor/leaflet.css" />
   <link rel="stylesheet" href="/css/styles.css" />
   <script src="/js/chart.umd.min.js"></script>
@@ -34,12 +40,24 @@
         <button class="btn" id="geoBtn" title="Use my location">📍</button>
         <button class="btn" id="notifyBtn" title="Weather alerts">🔕 Alerts</button>
         <button class="btn" id="fullscreenBtn" title="Fullscreen kiosk mode">⛶ Kiosk</button>
+        <button class="btn icon-btn" id="settingsBtn" title="Settings">⚙</button>
         <div class="unit-toggle" id="unitToggle">
           <button data-units="imperial" class="active">°F</button>
           <button data-units="metric">°C</button>
         </div>
       </div>
     </header>
+
+    <div class="settings-overlay hidden" id="settingsOverlay">
+      <div class="settings-panel" role="dialog" aria-modal="true" aria-label="Settings">
+        <div class="settings-head">
+          <h2>⚙ Settings</h2>
+          <button class="btn icon-btn" data-close title="Close">×</button>
+        </div>
+        <div id="settingsBody"></div>
+        <div class="settings-foot">Castform · weather, evolved</div>
+      </div>
+    </div>
 
     <div class="fav-bar hidden" id="favBar"></div>
 

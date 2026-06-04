@@ -1,0 +1,16 @@
+{
+  "name": "Castform — weather, evolved",
+  "short_name": "Castform",
+  "description": "A comprehensive, beautiful weather dashboard: radar, 7-day, air quality, and more.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#0a1120",
+  "theme_color": "#16233f",
+  "orientation": "any",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -5,6 +5,12 @@
   <meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0, viewport-fit=cover&quot; />
   <title>Castform · weather, evolved</title>
   <link rel=&quot;icon&quot; href=&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%23fff' stroke='%23111' stroke-width='6'/%3E%3Cpath d='M4 50a46 46 0 0 1 92 0z' fill='%23ff4d4d'/%3E%3Cline x1='4' y1='50' x2='96' y2='50' stroke='%23111' stroke-width='6'/%3E%3Ccircle cx='50' cy='50' r='13' fill='%23fff' stroke='%23111' stroke-width='6'/%3E%3C/svg%3E&quot; />
+  <link rel=&quot;manifest&quot; href=&quot;manifest.json&quot; />
+  <meta name=&quot;theme-color&quot; content=&quot;#16233f&quot; />
+  <meta name=&quot;apple-mobile-web-app-capable&quot; content=&quot;yes&quot; />
+  <meta name=&quot;apple-mobile-web-app-status-bar-style&quot; content=&quot;black-translucent&quot; />
+  <meta name=&quot;apple-mobile-web-app-title&quot; content=&quot;Castform&quot; />
+  <link rel=&quot;apple-touch-icon&quot; href=&quot;apple-touch-icon.png&quot; />
   <link rel=&quot;stylesheet&quot; href=&quot;https://unpkg.com/leaflet@1.9.4/dist/leaflet.css&quot; />
   <script src=&quot;https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js&quot;></script>
   <script src=&quot;https://unpkg.com/leaflet@1.9.4/dist/leaflet.js&quot;></script>
@@ -480,6 +486,64 @@ body.radar-fs-open { overflow: hidden; }
 .rain-fx i { position: absolute; top: -10%; width: 1px; height: 60px; background: linear-gradient(transparent, rgba(180,200,255,0.5)); animation: drop linear infinite; }
 @keyframes drop { to { transform: translateY(120vh); } }
 /* ============================================================
+   New features: story, vs-yesterday, inline precip, live favs, settings
+   ============================================================ */
+/* Today story + vs-yesterday/tip (hero) */
+.daystory { font-size: 0.9rem; color: var(--muted); line-height: 1.5; margin-top: 12px;
+  padding-top: 12px; border-top: 1px solid var(--stroke); }
+.vsy { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.vsy-d { font-size: 0.86rem; color: var(--text); font-weight: 600; }
+.vsy-tip { font-size: 0.8rem; font-weight: 600; color: var(--amber);
+  background: rgba(255,166,43,0.12); border: 1px solid rgba(255,166,43,0.3);
+  padding: 3px 10px; border-radius: 999px; }
+/* Inline 7-day precip-probability bar */
+.day .dprecip { grid-column: 1 / -1; display: flex; gap: 1px; height: 5px; margin-top: 4px;
+  border-radius: 3px; overflow: hidden; background: rgba(255,255,255,0.05); }
+.day .dprecip i { flex: 1; background: #5fa8ff; opacity: var(--a, 0); }
+.dd-story { font-weight: 600; color: var(--text); margin: 0 0 8px; font-size: 0.9rem; }
+/* Live favorite chips */
+.fav-chip { user-select: none; }
+.fav-chip.dragging { opacity: 0.5; }
+.fav-ico { display: inline-flex; }
+.fav-ico .wxicon { width: 20px; height: 20px; }
+.fav-temp { font-weight: 700; color: var(--text); }
+.fav-chip .fav-name { font-weight: 500; }
+/* Settings overlay + panel */
+.settings-overlay { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center;
+  justify-content: center; padding: 20px; background: rgba(6,10,20,0.6); backdrop-filter: blur(6px);
+  animation: fadeIn .2s ease both; }
+.settings-overlay.hidden { display: none; }
+.settings-panel { width: 100%; max-width: 460px; max-height: 88vh; overflow-y: auto;
+  background: linear-gradient(180deg, #1a2740, #121b30); border: 1px solid var(--stroke);
+  border-radius: 20px; box-shadow: var(--shadow); padding: 18px 20px 20px; }
+.settings-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.settings-head h2 { font-size: 1.1rem; font-weight: 700; color: var(--text); margin: 0; text-transform: none; letter-spacing: 0; }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 13px 0; border-bottom: 1px solid var(--stroke); }
+.set-row:last-child { border-bottom: 0; }
+.set-row > label { font-weight: 600; color: var(--text); display: flex; flex-direction: column; gap: 2px; }
+.set-hint { font-size: 0.72rem; color: var(--faint); font-weight: 500; }
+.set-seg { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; border-radius: 11px;
+  overflow: hidden; border: 1px solid var(--stroke); background: var(--glass); }
+.set-seg button { padding: 7px 11px; background: none; border: none; color: var(--muted);
+  cursor: pointer; font-size: 0.82rem; font-weight: 600; }
+.set-seg button.active { background: var(--accent); color: #06203f; }
+.set-toggle { width: 46px; height: 26px; border-radius: 999px; border: 1px solid var(--stroke);
+  background: rgba(255,255,255,0.08); position: relative; cursor: pointer; flex: 0 0 auto; transition: background .2s; }
+.set-toggle span { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; transition: transform .2s; }
+.set-toggle.on { background: var(--accent); }
+.set-toggle.on span { transform: translateX(20px); }
+.set-startup { display: flex; gap: 8px; }
+.btn.sm { padding: 7px 11px; font-size: 0.82rem; }
+.settings-foot { text-align: center; color: var(--faint); font-size: 0.72rem; margin-top: 14px; }
+/* Reduce-motion (settings toggle) — calmer UI */
+.reduce-motion *, .reduce-motion *::before, .reduce-motion *::after {
+  animation-duration: .001s !important; animation-iteration-count: 1 !important;
+  transition-duration: .001s !important; }
+.reduce-motion .cloud-fx, .reduce-motion .snow-fx, .reduce-motion .rain-fx,
+.reduce-motion .sky-layer::before, .reduce-motion .sky-layer::after { display: none; }
+/* ============================================================
    Adaptive / mobile layout
    ============================================================ */
 /* Tablets &amp; large phones — stack the header so the search gets a full row */
@@ -515,6 +579,12 @@ body.radar-fs-open { overflow: hidden; }
   .cmp-vs { display: none; }
   /* Sun arc must not overflow the narrow card */
   .sun-arc { width: 100%; max-width: 240px; }
+  /* Settings panel: let rows wrap so segmented controls don't overflow */
+  .settings-overlay { padding: 12px; align-items: flex-end; }
+  .settings-panel { max-height: 92vh; border-radius: 18px; }
+  .set-row { flex-wrap: wrap; gap: 8px; }
+  .set-row > label { flex: 1 1 100%; }
+  .set-seg { justify-content: flex-start; }
 }
 /* Small phones (iPhone mini / SE width) */
 @media (max-width: 400px) {
@@ -550,12 +620,23 @@ body.radar-fs-open { overflow: hidden; }
         <button class=&quot;btn&quot; id=&quot;geoBtn&quot; title=&quot;Use my location&quot;>📍</button>
         <button class=&quot;btn&quot; id=&quot;notifyBtn&quot; title=&quot;Weather alerts&quot;>🔕 Alerts</button>
         <button class=&quot;btn&quot; id=&quot;fullscreenBtn&quot; title=&quot;Fullscreen kiosk mode&quot;>⛶ Kiosk</button>
+        <button class=&quot;btn icon-btn&quot; id=&quot;settingsBtn&quot; title=&quot;Settings&quot;>⚙</button>
         <div class=&quot;unit-toggle&quot; id=&quot;unitToggle&quot;>
           <button data-units=&quot;imperial&quot; class=&quot;active&quot;>°F</button>
           <button data-units=&quot;metric&quot;>°C</button>
         </div>
       </div>
     </header>
+    <div class=&quot;settings-overlay hidden&quot; id=&quot;settingsOverlay&quot;>
+      <div class=&quot;settings-panel&quot; role=&quot;dialog&quot; aria-modal=&quot;true&quot; aria-label=&quot;Settings&quot;>
+        <div class=&quot;settings-head&quot;>
+          <h2>⚙ Settings</h2>
+          <button class=&quot;btn icon-btn&quot; data-close title=&quot;Close&quot;>×</button>
+        </div>
+        <div id=&quot;settingsBody&quot;></div>
+        <div class=&quot;settings-foot&quot;>Castform · weather, evolved</div>
+      </div>
+    </div>
     <div class=&quot;fav-bar hidden&quot; id=&quot;favBar&quot;></div>
     <div id=&quot;alerts&quot;></div>
     <div id=&quot;nowcast&quot; class=&quot;nowcast hidden&quot;></div>
@@ -1322,16 +1403,60 @@ const state = {
   units: localStorage.getItem(&quot;units&quot;) || &quot;imperial&quot;,
   place: JSON.parse(localStorage.getItem(&quot;place&quot;) || &quot;null&quot;),
   favorites: JSON.parse(localStorage.getItem(&quot;favorites&quot;) || &quot;[]&quot;),
+  // Settings (see the settings panel)
+  timeFormat: localStorage.getItem(&quot;timeFormat&quot;) || &quot;auto&quot;,     // auto | 12 | 24
+  windUnit: localStorage.getItem(&quot;windUnit&quot;) || &quot;auto&quot;,         // auto | mph | kmh | ms | kn
+  pressureUnit: localStorage.getItem(&quot;pressureUnit&quot;) || &quot;auto&quot;, // auto | hPa | inHg | mmHg
+  reduceMotion: localStorage.getItem(&quot;reduceMotion&quot;) === &quot;1&quot;,
+  defaultPlace: JSON.parse(localStorage.getItem(&quot;defaultPlace&quot;) || &quot;null&quot;),
 };
 let refreshTimer = null;
 let chart = null;
 let histChart = null;
 const $ = (id) => document.getElementById(id);
 const tempU = () => (state.units === &quot;imperial&quot; ? &quot;°F&quot; : &quot;°C&quot;);
-const windU = () => (state.units === &quot;imperial&quot; ? &quot;mph&quot; : &quot;km/h&quot;);
 const precU = () => (state.units === &quot;imperial&quot; ? &quot;in&quot; : &quot;mm&quot;);
 const r0 = (n) => (n == null ? &quot;–&quot; : Math.round(n));
 const r1 = (n) => (n == null ? &quot;–&quot; : Math.round(n * 10) / 10);
+// Wind: convertible independently of the temperature units ------------------
+const WIND_TO_MS = { mph: 0.44704, kmh: 1 / 3.6, ms: 1, kn: 0.514444 };
+const WIND_LABEL = { mph: &quot;mph&quot;, kmh: &quot;km/h&quot;, ms: &quot;m/s&quot;, kn: &quot;kn&quot; };
+const effWind = () => (state.windUnit === &quot;auto&quot; ? (state.units === &quot;imperial&quot; ? &quot;mph&quot; : &quot;kmh&quot;) : state.windUnit);
+const fetchedWind = () => ((state.lastData &amp;&amp; state.lastData.units &amp;&amp; state.lastData.units.wind) || (state.units === &quot;imperial&quot; ? &quot;mph&quot; : &quot;kmh&quot;));
+const toWind = (v) => (v == null ? null : (v * (WIND_TO_MS[fetchedWind()] || WIND_TO_MS.mph)) / WIND_TO_MS[effWind()]);
+const windU = () => WIND_LABEL[effWind()];
+const wv = (v) => r0(toWind(v));
+// Pressure: hPa from the API, displayed in the chosen unit ------------------
+const effPress = () => (state.pressureUnit === &quot;auto&quot; ? (state.units === &quot;imperial&quot; ? &quot;inHg&quot; : &quot;hPa&quot;) : state.pressureUnit);
+function pressureParts(hPa) {
+  const u = effPress();
+  if (hPa == null) return { value: null, v: &quot;–&quot;, u, min: 960, max: 1050, dec: 0 };
+  if (u === &quot;inHg&quot;) return { value: hPa * 0.02953, v: (hPa * 0.02953).toFixed(2), u: &quot;inHg&quot;, min: 28.0, max: 31.2, dec: 2 };
+  if (u === &quot;mmHg&quot;) return { value: hPa * 0.7500617, v: String(Math.round(hPa * 0.7500617)), u: &quot;mmHg&quot;, min: 720, max: 790, dec: 0 };
+  return { value: hPa, v: String(Math.round(hPa)), u: &quot;hPa&quot;, min: 960, max: 1050, dec: 0 };
+}
+// Time formatting honoring the 12/24h setting -------------------------------
+const hourPref = () => (state.timeFormat === &quot;24&quot; ? false : state.timeFormat === &quot;12&quot; ? true : undefined);
+function clk(d, withMin) {
+  const dt = d instanceof Date ? d : new Date(d);
+  const o = { hour: &quot;numeric&quot; };
+  if (withMin !== false) o.minute = &quot;2-digit&quot;;
+  const h12 = hourPref(); if (h12 !== undefined) o.hour12 = h12;
+  return dt.toLocaleTimeString([], o);
+}
+// Re-render only the views affected by a client-side setting change (time /
+// wind / pressure units) using the data we already have — no refetch, and no
+// need to rebuild the radar map or re-pull history.
+function rerender() {
+  if (!(state.lastData &amp;&amp; state.place)) return;
+  const f = state.lastData.forecast;
+  const meta = describe(f.current.weather_code);
+  renderCurrent(state.place, f, meta);
+  renderTiles(f, state.lastData.air_quality);
+  renderHourly(f);
+  renderDaily(f);
+  renderSun(f);
+}
 // --- Boot -----------------------------------------------------------------
 function boot() {
   $(&quot;unitToggle&quot;).querySelectorAll(&quot;button&quot;).forEach((b) => {
@@ -1343,19 +1468,34 @@ function boot() {
   setupSearch();
   setupCompare();
   setupNotifications();
+  setupSettings();
+  applyReduceMotion();
+  registerSW();
   wireFullscreen($(&quot;fullscreenBtn&quot;));
   buildStars();
   renderFavorites();
   scheduleRefresh();
-  // Load the last place if we have one, otherwise a sensible default.
-  // We intentionally do NOT auto-prompt for geolocation on first load —
-  // the permission modal is jarring; &quot;My location&quot; makes it opt-in.
-  loadWeather(state.place || fallbackPlace());
+  // Load the startup default if the user pinned one, else the last place,
+  // else a sensible fallback. We intentionally do NOT auto-prompt geolocation.
+  loadWeather(state.defaultPlace || state.place || fallbackPlace());
+}
+function applyReduceMotion() {
+  document.body.classList.toggle(&quot;reduce-motion&quot;, !!state.reduceMotion);
+}
+// Register the service worker (PWA offline + installability). Same-origin only;
+// silently ignored where unsupported or blocked (e.g. file://).
+function registerSW() {
+  if (!(&quot;serviceWorker&quot; in navigator)) return;
+  if (location.protocol !== &quot;http:&quot; &amp;&amp; location.protocol !== &quot;https:&quot;) return;
+  const reg = () => navigator.serviceWorker.register(&quot;sw.js&quot;).catch(() => {});
+  if (document.readyState === &quot;complete&quot;) reg();
+  else window.addEventListener(&quot;load&quot;, reg);
 }
 function setUnits(u) {
   if (u === state.units) return;
   state.units = u;
   localStorage.setItem(&quot;units&quot;, u);
+  favCache.clear(); // temps were fetched in the old unit
   $(&quot;unitToggle&quot;).querySelectorAll(&quot;button&quot;).forEach((b) =>
     b.classList.toggle(&quot;active&quot;, b.dataset.units === u)
   );
@@ -1497,7 +1637,7 @@ function render(place, data) {
   const todayStr2 = new Date().toLocaleDateString(&quot;en-CA&quot;, { timeZone: f.timezone });
   let di2 = f.daily.time.indexOf(todayStr2); if (di2 < 0) di2 = 1;
   loadHistory(place, f.daily.temperature_2m_max[di2], f.daily.temperature_2m_min[di2]);
-  const when = new Date(data.fetched_at * 1000).toLocaleTimeString([], { hour: &quot;2-digit&quot;, minute: &quot;2-digit&quot; });
+  const when = clk(new Date(data.fetched_at * 1000));
   $(&quot;foot&quot;).innerHTML =
     `Updated ${when} · ${place.lat.toFixed(2)}, ${place.lon.toFixed(2)} · ` +
     `Data: <a href=&quot;https://open-meteo.com&quot; target=&quot;_blank&quot;>Open-Meteo</a>` +
@@ -1535,8 +1675,10 @@ function renderCurrent(place, f, meta) {
         </div>
         <div class=&quot;hilo&quot;>High <b>${r0(today.temperature_2m_max[di])}°</b> · Low <b>${r0(today.temperature_2m_min[di])}°</b></div>
         ${comfortLine(c)}
+        ${vsYesterdayLine(today, di, c)}
       </div>
     </div>
+    <div class=&quot;daystory&quot;>${todayStory(f, di)}</div>
     <div class=&quot;hero-today&quot;>
       <div class=&quot;ht&quot;><span class=&quot;htk&quot;>🌅 Sunrise</span><span class=&quot;htv&quot;>${sunFmt(today.sunrise[di])}</span></div>
       <div class=&quot;ht&quot;><span class=&quot;htk&quot;>🌇 Sunset</span><span class=&quot;htv&quot;>${sunFmt(today.sunset[di])}</span></div>
@@ -1544,7 +1686,7 @@ function renderCurrent(place, f, meta) {
     </div>
   `;
 }
-const sunFmt = (iso) => iso ? new Date(iso).toLocaleTimeString([], { hour: &quot;2-digit&quot;, minute: &quot;2-digit&quot; }) : &quot;–&quot;;
+const sunFmt = (iso) => iso ? clk(iso) : &quot;–&quot;;
 // Castform's in-game forms, mapped to the live weather (its gimmick!).
 function castformForm(theme, isDay) {
   if (theme === &quot;clear&quot;) return { name: isDay ? &quot;Sunny Form&quot; : &quot;Normal Form&quot;, emoji: isDay ? &quot;☀️&quot; : &quot;🌙&quot; };
@@ -1572,6 +1714,55 @@ function comfortLine(c) {
   }
   return `<div class=&quot;comfort&quot;><span class=&quot;comfort-dot&quot;></span>${label} <span class=&quot;comfort-sub&quot;>· ${driver}</span></div>`;
 }
+// &quot;Warmer/cooler than yesterday&quot; + a quick clothing/activity tip.
+function vsYesterdayLine(today, di, c) {
+  let vs = &quot;&quot;;
+  if (di >= 1 &amp;&amp; today.temperature_2m_max &amp;&amp; today.temperature_2m_max[di - 1] != null &amp;&amp; today.temperature_2m_max[di] != null) {
+    const d = Math.round(today.temperature_2m_max[di] - today.temperature_2m_max[di - 1]);
+    vs = d === 0 ? &quot;Same high as yesterday&quot; : `${Math.abs(d)}° ${d > 0 ? &quot;warmer&quot; : &quot;cooler&quot;} than yesterday`;
+  }
+  const tip = dayTip(c, today, di);
+  if (!vs &amp;&amp; !tip) return &quot;&quot;;
+  return `<div class=&quot;vsy&quot;>${vs ? `<span class=&quot;vsy-d&quot;>${vs}</span>` : &quot;&quot;}${tip ? `<span class=&quot;vsy-tip&quot;>${tip}</span>` : &quot;&quot;}</div>`;
+}
+function dayTip(c, today, di) {
+  const imp = state.units === &quot;imperial&quot;;
+  const feels = c.apparent_temperature;
+  const pop = today.precipitation_probability_max ? today.precipitation_probability_max[di] : 0;
+  const code = c.weather_code;
+  if ((code >= 71 &amp;&amp; code <= 77) || code === 85 || code === 86) return &quot;🧤 Snowy — bundle up&quot;;
+  if (pop >= 60) return &quot;☔ Take an umbrella&quot;;
+  const cold = imp ? 38 : 3, cool = imp ? 56 : 13, warm = imp ? 86 : 30;
+  if (feels != null &amp;&amp; feels <= cold) return &quot;🧥 Heavy coat weather&quot;;
+  if (feels != null &amp;&amp; feels <= cool) return &quot;🧥 Light jacket&quot;;
+  if (feels != null &amp;&amp; feels >= warm) return &quot;🥵 Stay cool &amp; hydrated&quot;;
+  const uv = today.uv_index_max ? today.uv_index_max[di] : 0;
+  if (uv >= 8) return &quot;🧴 High UV — wear sunscreen&quot;;
+  return &quot;👕 Comfortable out&quot;;
+}
+// Condition + temps headline (no precip — that's shown separately).
+function dayHeadline(f, i) {
+  const d = f.daily;
+  const meta = describe(d.weather_code[i]);
+  return `${meta.label}. High ${r0(d.temperature_2m_max[i])}°, low ${r0(d.temperature_2m_min[i])}°.`;
+}
+// Fuller one-sentence story (headline + precip window) for today's hero.
+function dayStorySentence(f, i) {
+  let s = dayHeadline(f, i);
+  const sum = precipSummary(f, hourIdxForDay(f, f.daily.time[i]));
+  if (sum &amp;&amp; !sum.dry) s += ` ${sum.text}.`;
+  return s;
+}
+function todayStory(f, di) {
+  let s = dayStorySentence(f, di);
+  // Teaser: if today is dry but tomorrow isn't, flag the change.
+  const todaySum = precipSummary(f, hourIdxForDay(f, f.daily.time[di]));
+  if ((!todaySum || todaySum.dry) &amp;&amp; di + 1 < f.daily.time.length) {
+    const tmrw = precipSummary(f, hourIdxForDay(f, f.daily.time[di + 1]));
+    if (tmrw &amp;&amp; !tmrw.dry) s += &quot; Rain moving in tomorrow.&quot;;
+  }
+  return s;
+}
 // Animate a number from 0 → target for a premium &quot;spin-up&quot; feel.
 function countUp(el, target, ms) {
   if (!el || target == null || isNaN(target)) return;
@@ -1594,13 +1785,14 @@ function renderTiles(f, air) {
   const uv = hourlyNow(f, &quot;uv_index&quot;);
   const visM = c.visibility != null ? c.visibility : hourlyNow(f, &quot;visibility&quot;);
   // Gauges — the console centerpiece.
+  const press = pressureParts(c.pressure_msl);
   const gauges = [
-    compassGauge(c.wind_direction_10m, c.wind_speed_10m, windU(), c.wind_gusts_10m) +
+    compassGauge(c.wind_direction_10m, toWind(c.wind_speed_10m), windU(), toWind(c.wind_gusts_10m)) +
       `<div class=&quot;gauge-cap&quot;>Wind · ${compass(c.wind_direction_10m)}</div>`,
     gauge({ value: c.relative_humidity_2m, min: 0, max: 100, unit: &quot;%&quot;, label: &quot;Humidity&quot;,
       sub: c.dew_point_2m != null ? `dew ${r0(c.dew_point_2m)}°` : &quot;&quot;, color: &quot;#54d6c2&quot; }),
-    gauge({ value: c.pressure_msl, min: 960, max: 1050, unit: &quot;&quot;, decimals: 0, label: &quot;Pressure&quot;,
-      sub: &quot;hPa&quot;, color: &quot;#9b8cff&quot; }),
+    gauge({ value: press.value, min: press.min, max: press.max, unit: &quot;&quot;, decimals: press.dec, label: &quot;Pressure&quot;,
+      sub: press.u, color: &quot;#9b8cff&quot; }),
     gauge({ value: uv, min: 0, max: 12, unit: &quot;&quot;, decimals: 0, label: &quot;UV index&quot;,
       sub: uvLabel(uv), colors: UV_COLORS }),
     gauge({ value: c.cloud_cover, min: 0, max: 100, unit: &quot;%&quot;, label: &quot;Cloud&quot;, color: &quot;#7fb2ff&quot; }),
@@ -1618,7 +1810,7 @@ function renderTiles(f, air) {
     [&quot;Feels like&quot;, `${r0(c.apparent_temperature)}°`],
     [&quot;Visibility&quot;, vis],
     [&quot;Precip now&quot;, `${r1(c.precipitation)} ${precU()}`],
-    [&quot;Wind gust&quot;, `${r0(c.wind_gusts_10m)} ${windU()}`],
+    [&quot;Wind gust&quot;, `${wv(c.wind_gusts_10m)} ${windU()}`],
   ];
   $(&quot;tiles&quot;).innerHTML =
     `<div class=&quot;gauge-grid&quot;>${gauges.map((g) => `<div class=&quot;gauge-cell&quot;>${g}</div>`).join(&quot;&quot;)}</div>` +
@@ -1647,7 +1839,7 @@ function renderHourly(f) {
   const end = Math.min(h.time.length, start + 48);
   const idx = [];
   for (let i = start; i < end; i++) idx.push(i);
-  const labels = idx.map((i) => new Date(h.time[i]).toLocaleTimeString([], { hour: &quot;numeric&quot; }));
+  const labels = idx.map((i) => clk(h.time[i], false));
   const temps = idx.map((i) => h.temperature_2m[i]);
   const pop = idx.map((i) => h.precipitation_probability[i]);
   const ctx = $(&quot;hourlyChart&quot;).getContext(&quot;2d&quot;);
@@ -1694,7 +1886,7 @@ function renderHourly(f) {
     const i = idx[k];
     const el = document.createElement(&quot;div&quot;);
     el.className = &quot;hour&quot;;
-    const label = k === 0 ? &quot;Now&quot; : new Date(h.time[i]).toLocaleTimeString([], { hour: &quot;numeric&quot; });
+    const label = k === 0 ? &quot;Now&quot; : clk(h.time[i], false);
     el.innerHTML = `
       <div class=&quot;t&quot;>${label}</div>
       ${icon(h.weather_code[i], h.is_day[i])}
@@ -1762,6 +1954,21 @@ function precipSummary(f, idxs) {
   text += ` · up to ${peak}% chance`;
   return { text };
 }
+// Thin 24-segment precip-probability bar shown inline on each 7-day row, so
+// the rainy window is visible at a glance without expanding the day.
+function precipBar(f, ds) {
+  const idxs = hourIdxForDay(f, ds);
+  const pops = (f.hourly &amp;&amp; f.hourly.precipitation_probability) || [];
+  if (!idxs.length) return &quot;&quot;;
+  let peak = 0;
+  const segs = idxs.map((j) => {
+    const p = pops[j] == null ? 0 : pops[j];
+    if (p > peak) peak = p;
+    const a = p <= 3 ? 0 : Math.max(0.12, p / 100);
+    return `<i style=&quot;--a:${a.toFixed(2)}&quot;></i>`;
+  }).join(&quot;&quot;);
+  return `<div class=&quot;dprecip&quot; title=&quot;Hourly chance of precipitation (peak ${peak}%)&quot;>${segs}</div>`;
+}
 function dayDetail(f, i, ds) {
   const d = f.daily, h = f.hourly || {};
   const idxs = hourIdxForDay(f, ds);
@@ -1769,21 +1976,22 @@ function dayDetail(f, i, ds) {
   let chips = &quot;&quot;;
   for (let k = 0; k < idxs.length; k += 2) {
     const j = idxs[k];
-    const lbl = new Date(h.time[j]).toLocaleTimeString([], { hour: &quot;numeric&quot; });
+    const lbl = clk(h.time[j], false);
     const pp = h.precipitation_probability ? h.precipitation_probability[j] : null;
     const isDay = h.is_day ? h.is_day[j] : 1;
     chips += `<div class=&quot;dd-hour&quot;><div class=&quot;t&quot;>${lbl}</div>${icon(h.weather_code[j], isDay)}` +
       `<div class=&quot;tp&quot;>${r0(h.temperature_2m[j])}°</div>` +
       `<div class=&quot;pp&quot;>${pp != null &amp;&amp; pp >= 5 ? pp + &quot;%&quot; : &quot;&quot;}</div></div>`;
   }
-  const fmtT = (s) => (s ? new Date(s).toLocaleTimeString([], { hour: &quot;numeric&quot;, minute: &quot;2-digit&quot; }) : &quot;–&quot;);
+  const fmtT = (s) => (s ? clk(s) : &quot;–&quot;);
   const stats = [];
   if (d.sunrise) stats.push(`🌅 ${fmtT(d.sunrise[i])}`);
   if (d.sunset) stats.push(`🌇 ${fmtT(d.sunset[i])}`);
   if (d.precipitation_sum &amp;&amp; d.precipitation_sum[i] != null) stats.push(`🌧 ${r1(d.precipitation_sum[i])} ${precU()} total`);
-  if (d.wind_speed_10m_max) stats.push(`🌬 ${r0(d.wind_speed_10m_max[i])} ${windU()} max`);
+  if (d.wind_speed_10m_max) stats.push(`🌬 ${wv(d.wind_speed_10m_max[i])} ${windU()} max`);
   if (d.uv_index_max) stats.push(`☀ UV ${r0(d.uv_index_max[i])}`);
   return `<div class=&quot;day-detail&quot; hidden>
+    <div class=&quot;dd-story&quot;>${dayHeadline(f, i)}</div>
     ${sum ? `<div class=&quot;dd-sum${sum.dry ? &quot; dry&quot; : &quot;&quot;}&quot;>${sum.text}</div>` : &quot;&quot;}
     <div class=&quot;dd-hours&quot;>${chips}</div>
     <div class=&quot;dd-stats&quot;>${stats.map((s) => `<span>${s}</span>`).join(&quot;&quot;)}</div>
@@ -1821,9 +2029,10 @@ function renderDaily(f) {
           </div>
           <div class=&quot;meta&quot;>
             <span>${pop != null ? &quot;💧 &quot; + r0(pop) + &quot;%&quot; : &quot;&quot;}</span>
-            <span>🌬 ${r0(d.wind_speed_10m_max[i])}</span>
+            <span>🌬 ${wv(d.wind_speed_10m_max[i])}</span>
             <span>☀ ${r0(d.uv_index_max[i])}</span>
           </div>
+          ${precipBar(f, ds)}
         </div>
         ${dayDetail(f, i, ds)}
       </div>`);
@@ -1948,7 +2157,7 @@ function renderSun(f) {
   const t = (set - rise) > 0 ? Math.min(1, Math.max(0, (now - rise) / (set - rise))) : 0;
   const ax = 20 + t * 200;
   const ay = 100 - Math.sin(t * Math.PI) * 80;
-  const fmt = (dt) => dt.toLocaleTimeString([], { hour: &quot;2-digit&quot;, minute: &quot;2-digit&quot; });
+  const fmt = (dt) => clk(dt);
   const dayLenMin = Math.round((set - rise) / 60000);
   const h = Math.floor(dayLenMin / 60), m = dayLenMin % 60;
   // Daylight change vs yesterday (index i-1, which exists because past_days=1).
@@ -2153,6 +2362,22 @@ function toggleFavorite() {
   localStorage.setItem(&quot;favorites&quot;, JSON.stringify(state.favorites));
   renderFavorites();
 }
+// Cache of each favorite's current conditions (so chips can show live temps
+// without hammering the API). Keyed by place; 10-min TTL.
+const favCache = new Map();
+async function favData(p) {
+  const k = placeKey(p);
+  const c = favCache.get(k);
+  if (c &amp;&amp; Date.now() - c.t < 600000) return c;
+  try {
+    const r = await fetch(`/api/weather?lat=${p.lat}&amp;lon=${p.lon}&amp;units=${state.units}&amp;compact=1`);
+    const d = await r.json();
+    const cur = (d.forecast &amp;&amp; d.forecast.current) || {};
+    const v = { t: Date.now(), temp: cur.temperature_2m, code: cur.weather_code, day: cur.is_day != null ? cur.is_day : 1 };
+    favCache.set(k, v);
+    return v;
+  } catch (e) { return null; }
+}
 function renderFavorites() {
   const bar = $(&quot;favBar&quot;);
   if (!bar) return;
@@ -2165,20 +2390,107 @@ function renderFavorites() {
   }
   bar.innerHTML = state.favorites.map((p, i) => {
     const active = state.place &amp;&amp; placeKey(p) === placeKey(state.place);
-    return `<button class=&quot;fav-chip ${active ? &quot;active&quot; : &quot;&quot;}&quot; data-i=&quot;${i}&quot;>${p.name}<span class=&quot;fav-x&quot; data-x=&quot;${i}&quot;>×</span></button>`;
+    return `<button class=&quot;fav-chip ${active ? &quot;active&quot; : &quot;&quot;}&quot; data-i=&quot;${i}&quot; draggable=&quot;true&quot;>` +
+      `<span class=&quot;fav-ico&quot;></span><span class=&quot;fav-name&quot;>${p.name}</span>` +
+      `<span class=&quot;fav-temp&quot;></span><span class=&quot;fav-x&quot; data-x=&quot;${i}&quot; title=&quot;Remove&quot;>×</span></button>`;
   }).join(&quot;&quot;);
   bar.querySelectorAll(&quot;.fav-chip&quot;).forEach((b) => {
+    const i = +b.dataset.i;
     b.onclick = (e) => {
       if (e.target.classList.contains(&quot;fav-x&quot;)) {
         state.favorites.splice(+e.target.dataset.x, 1);
         localStorage.setItem(&quot;favorites&quot;, JSON.stringify(state.favorites));
         renderFavorites();
       } else {
-        loadWeather(state.favorites[+b.dataset.i]);
+        loadWeather(state.favorites[i]);
       }
     };
+    // Drag-to-reorder (desktop). Touch falls back to tap-to-open.
+    b.addEventListener(&quot;dragstart&quot;, (e) => { e.dataTransfer.setData(&quot;text/plain&quot;, String(i)); b.classList.add(&quot;dragging&quot;); });
+    b.addEventListener(&quot;dragend&quot;, () => b.classList.remove(&quot;dragging&quot;));
+    b.addEventListener(&quot;dragover&quot;, (e) => e.preventDefault());
+    b.addEventListener(&quot;drop&quot;, (e) => {
+      e.preventDefault();
+      const from = +e.dataTransfer.getData(&quot;text/plain&quot;), to = i;
+      if (from === to || isNaN(from)) return;
+      const arr = state.favorites;
+      arr.splice(to, 0, arr.splice(from, 1)[0]);
+      localStorage.setItem(&quot;favorites&quot;, JSON.stringify(arr));
+      renderFavorites();
+    });
+    // Fill live temperature + icon asynchronously.
+    favData(state.favorites[i]).then((v) => {
+      if (!v) return;
+      const t = b.querySelector(&quot;.fav-temp&quot;), ic = b.querySelector(&quot;.fav-ico&quot;);
+      if (t &amp;&amp; v.temp != null) t.textContent = `${r0(v.temp)}°`;
+      if (ic &amp;&amp; v.code != null) ic.innerHTML = icon(v.code, v.day);
+    });
   });
   bar.classList.toggle(&quot;hidden&quot;, state.favorites.length === 0);
+}
+// --- Settings panel -------------------------------------------------------
+const SEGMENTS = {
+  units: [[&quot;imperial&quot;, &quot;°F&quot;], [&quot;metric&quot;, &quot;°C&quot;]],
+  timeFormat: [[&quot;auto&quot;, &quot;Auto&quot;], [&quot;12&quot;, &quot;12-hour&quot;], [&quot;24&quot;, &quot;24-hour&quot;]],
+  windUnit: [[&quot;auto&quot;, &quot;Auto&quot;], [&quot;mph&quot;, &quot;mph&quot;], [&quot;kmh&quot;, &quot;km/h&quot;], [&quot;ms&quot;, &quot;m/s&quot;], [&quot;kn&quot;, &quot;kn&quot;]],
+  pressureUnit: [[&quot;auto&quot;, &quot;Auto&quot;], [&quot;hPa&quot;, &quot;hPa&quot;], [&quot;inHg&quot;, &quot;inHg&quot;], [&quot;mmHg&quot;, &quot;mmHg&quot;]],
+};
+function seg(key, value) {
+  return `<div class=&quot;set-seg&quot; data-seg=&quot;${key}&quot;>` +
+    SEGMENTS[key].map(([v, l]) => `<button class=&quot;${v === value ? &quot;active&quot; : &quot;&quot;}&quot; data-v=&quot;${v}&quot;>${l}</button>`).join(&quot;&quot;) +
+    `</div>`;
+}
+function setupSettings() {
+  const btn = $(&quot;settingsBtn&quot;), overlay = $(&quot;settingsOverlay&quot;);
+  if (!btn || !overlay) return;
+  btn.onclick = () => { renderSettings(); overlay.classList.remove(&quot;hidden&quot;); };
+  overlay.addEventListener(&quot;click&quot;, (e) => {
+    if (e.target === overlay || e.target.closest(&quot;[data-close]&quot;)) overlay.classList.add(&quot;hidden&quot;);
+  });
+  document.addEventListener(&quot;keydown&quot;, (e) => { if (e.key === &quot;Escape&quot;) overlay.classList.add(&quot;hidden&quot;); });
+}
+function renderSettings() {
+  const body = $(&quot;settingsBody&quot;);
+  if (!body) return;
+  const startup = state.defaultPlace ? state.defaultPlace.name : &quot;Last viewed&quot;;
+  body.innerHTML = `
+    <div class=&quot;set-row&quot;><label>Temperature</label>${seg(&quot;units&quot;, state.units)}</div>
+    <div class=&quot;set-row&quot;><label>Time format</label>${seg(&quot;timeFormat&quot;, state.timeFormat)}</div>
+    <div class=&quot;set-row&quot;><label>Wind speed</label>${seg(&quot;windUnit&quot;, state.windUnit)}</div>
+    <div class=&quot;set-row&quot;><label>Pressure</label>${seg(&quot;pressureUnit&quot;, state.pressureUnit)}</div>
+    <div class=&quot;set-row&quot;><label>Reduce motion<span class=&quot;set-hint&quot;>Calmer — fewer animations</span></label>
+      <button class=&quot;set-toggle ${state.reduceMotion ? &quot;on&quot; : &quot;&quot;}&quot; data-toggle=&quot;reduceMotion&quot; aria-pressed=&quot;${state.reduceMotion}&quot;><span></span></button></div>
+    <div class=&quot;set-row&quot;><label>Startup location<span class=&quot;set-hint&quot;>Opens to ${startup}</span></label>
+      <div class=&quot;set-startup&quot;>
+        <button class=&quot;btn sm&quot; data-act=&quot;setdefault&quot;>Pin current</button>
+        ${state.defaultPlace ? `<button class=&quot;btn sm&quot; data-act=&quot;cleardefault&quot;>Reset</button>` : &quot;&quot;}
+      </div></div>`;
+  body.querySelectorAll(&quot;.set-seg&quot;).forEach((sgEl) => {
+    sgEl.querySelectorAll(&quot;button&quot;).forEach((b) => { b.onclick = () => setSetting(sgEl.dataset.seg, b.dataset.v); });
+  });
+  const tog = body.querySelector('[data-toggle=&quot;reduceMotion&quot;]');
+  if (tog) tog.onclick = () => {
+    state.reduceMotion = !state.reduceMotion;
+    localStorage.setItem(&quot;reduceMotion&quot;, state.reduceMotion ? &quot;1&quot; : &quot;0&quot;);
+    applyReduceMotion(); renderSettings();
+  };
+  const act = (n, fn) => { const el = body.querySelector(`[data-act=&quot;${n}&quot;]`); if (el) el.onclick = fn; };
+  act(&quot;setdefault&quot;, () => {
+    if (!state.place) return;
+    state.defaultPlace = { name: state.place.name, admin1: state.place.admin1, country: state.place.country,
+      country_code: state.place.country_code, lat: state.place.lat, lon: state.place.lon };
+    localStorage.setItem(&quot;defaultPlace&quot;, JSON.stringify(state.defaultPlace));
+    renderSettings();
+  });
+  act(&quot;cleardefault&quot;, () => { state.defaultPlace = null; localStorage.removeItem(&quot;defaultPlace&quot;); renderSettings(); });
+}
+function setSetting(key, value) {
+  if (state[key] === value) return;
+  if (key === &quot;units&quot;) { setUnits(value); renderSettings(); return; } // needs a refetch
+  state[key] = value;
+  localStorage.setItem(key, value);
+  rerender();        // client-side only — no refetch
+  renderSettings();
 }
 // --- Click-to-pick on the radar map ---------------------------------------
 async function onMapPick(lat, lon) {
@@ -2257,7 +2569,7 @@ function compareHtml(place, data, showClose) {
     <div class=&quot;cmp-stats&quot;>
       <span>Feels ${r0(c.apparent_temperature)}°</span>
       <span>💧 ${r0(c.relative_humidity_2m)}%</span>
-      <span>🌬 ${r0(c.wind_speed_10m)} ${windU()}</span>
+      <span>🌬 ${wv(c.wind_speed_10m)} ${windU()}</span>
       <span>AQI ${aq.us_aqi != null ? r0(aq.us_aqi) : (aq.european_aqi != null ? r0(aq.european_aqi) : &quot;–&quot;)}</span>
     </div></div>`;
 }
@@ -2312,7 +2624,7 @@ function maybeNotify(place, f, alerts) {
 function pulseUpdated() {
   const t = $(&quot;updateToast&quot;);
   if (!t) return;
-  t.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: &quot;2-digit&quot;, minute: &quot;2-digit&quot; })}`;
+  t.textContent = `Updated ${clk(new Date())}`;
   t.classList.add(&quot;show&quot;);
   setTimeout(() => t.classList.remove(&quot;show&quot;), 2200);
 }
