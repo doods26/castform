@@ -112,6 +112,7 @@ header.topbar {
 .results button:hover { background: var(--glass-strong); }
 .results .sub { color: var(--muted); font-size: 0.82rem; }
 .results:empty { display: none; }
+.results-head { padding: 9px 15px 4px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.8px; color: var(--faint); font-weight: 700; }
 .toolbar { display: flex; gap: 8px; align-items: center; }
 .btn {
   display: inline-flex; align-items: center; gap: 6px;
@@ -404,12 +405,17 @@ body.radar-fs-open { overflow: hidden; }
 @keyframes lightningFlash { 0% { opacity: 0; } 15% { opacity: 0.55; } 30% { opacity: 0.1; } 45% { opacity: 0.5; } 100% { opacity: 0; } }
 /* Nowcast banner ---------------------------------------------------------- */
 .nowcast {
-  display: flex; align-items: center; gap: 12px; margin-bottom: 18px;
+  display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px;
   padding: 13px 18px; border-radius: 16px; font-size: 1rem; font-weight: 600;
   background: linear-gradient(100deg, rgba(95,168,255,0.22), rgba(95,168,255,0.06));
   border: 1px solid rgba(95,168,255,0.4); backdrop-filter: blur(12px);
   animation: fadeIn 0.5s ease both;
 }
+.nc-main { display: flex; align-items: center; gap: 12px; }
+.nc-graph { display: flex; flex-direction: column; gap: 2px; }
+.nc-graph svg { width: 100%; height: 48px; display: block; }
+.nc-graph-x { display: flex; justify-content: space-between; font-size: 0.66rem;
+  font-weight: 600; color: var(--faint); padding: 0 2px; }
 .nowcast.dry { background: linear-gradient(100deg, rgba(126,217,87,0.16), rgba(126,217,87,0.04)); border-color: rgba(126,217,87,0.35); }
 .nowcast.hidden { display: none; }
 .nowcast .nc-icon { font-size: 1.5rem; line-height: 1; animation: bob 2s ease-in-out infinite; }
@@ -508,6 +514,17 @@ body.radar-fs-open { overflow: hidden; }
 .fav-ico .wxicon { width: 20px; height: 20px; }
 .fav-temp { font-weight: 700; color: var(--text); }
 .fav-chip .fav-name { font-weight: 500; }
+/* Lifestyle / activity indices */
+.life-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.life { background: rgba(255,255,255,0.05); border: 1px solid var(--stroke); border-radius: 14px; padding: 12px 13px; }
+.life-top { display: flex; align-items: center; justify-content: space-between; }
+.life-emoji { font-size: 1.4rem; }
+.life-score { font-size: 1.5rem; font-weight: 800; line-height: 1; }
+.life-name { font-weight: 700; margin-top: 4px; }
+.life-name .life-sub { font-weight: 500; color: var(--faint); font-size: 0.72rem; margin-left: 6px; }
+.life-bar { height: 5px; border-radius: 3px; background: rgba(255,255,255,0.1); overflow: hidden; margin: 8px 0 6px; }
+.life-bar i { display: block; height: 100%; border-radius: 3px; }
+.life-reason { font-size: 0.74rem; color: var(--muted); }
 /* Settings overlay + panel */
 .settings-overlay { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center;
   justify-content: center; padding: 20px; background: rgba(6,10,20,0.6); backdrop-filter: blur(6px);
@@ -712,6 +729,11 @@ body.radar-fs-open { overflow: hidden; }
       <!-- Air quality + Sun -->
       <section class="card sp6" id="aqiCard"><h2><span class="h2-ico">🍃</span>Air quality</h2><div id="aqiBody"></div></section>
       <section class="card sp6"><h2><span class="h2-ico">🌅</span>Sun &amp; daylight</h2><div class="sun-card" id="sunCard"></div></section>
+      <!-- Lifestyle / activity indices -->
+      <section class="card sp6" id="lifestyleCard">
+        <h2><span class="h2-ico">🎯</span>Good day for…</h2>
+        <div class="life-grid" id="lifestyleBody"></div>
+      </section>
       <!-- Compare two cities -->
       <section class="card compare-card">
         <div class="radar-head">
@@ -1456,6 +1478,7 @@ function rerender() {
   renderHourly(f);
   renderDaily(f);
   renderSun(f);
+  renderLifestyle(f, state.lastData.air_quality);
 }
 // --- Boot -----------------------------------------------------------------
 function boot() {
@@ -1501,34 +1524,83 @@ function setUnits(u) {
   );
   if (state.place) loadWeather(state.place);
 }
-// --- Search (debounced geocoding) ----------------------------------------
+// --- Search (debounced geocoding + ZIP + recents + flags) ----------------
+// ISO country code → flag emoji (regional-indicator letters).
+function flag(cc) {
+  if (!cc || cc.length !== 2) return "";
+  const up = cc.toUpperCase();
+  if (up < "AA" || up > "ZZ") return "";
+  return String.fromCodePoint(0x1F1E6 + up.charCodeAt(0) - 65, 0x1F1E6 + up.charCodeAt(1) - 65);
+}
+let recent = JSON.parse(localStorage.getItem("recent") || "[]");
+function recordRecent(p) {
+  if (!p || !p.name || p.name === "Pinned point" || p.name === "My location") return;
+  const k = placeKey(p);
+  recent = [{ name: p.name, admin1: p.admin1, country: p.country, country_code: p.country_code, lat: p.lat, lon: p.lon },
+    ...recent.filter((q) => placeKey(q) !== k)].slice(0, 6);
+  localStorage.setItem("recent", JSON.stringify(recent));
+}
+// Postal-code lookup via zippopotam.us (free, CORS-enabled). Tries the current
+// country first, then a few common ones.
+async function zipSearch(zip) {
+  const z = zip.replace(/\s/g, "");
+  const ccs = [];
+  if (state.place && state.place.country_code) ccs.push(state.place.country_code.toLowerCase());
+  ["us", "gb", "ca", "de", "fr", "au"].forEach((c) => { if (!ccs.includes(c)) ccs.push(c); });
+  for (const cc of ccs.slice(0, 3)) {
+    try {
+      const r = await fetch(`https://api.zippopotam.us/${cc}/${encodeURIComponent(z)}`);
+      if (!r.ok) continue;
+      const d = await r.json();
+      if (d.places && d.places.length) {
+        return d.places.slice(0, 5).map((p) => ({
+          name: `${p["place name"]}${p.state ? ", " + (p["state abbreviation"] || p.state) : ""}`,
+          admin1: p.state, country: d.country, country_code: (d["country abbreviation"] || cc).toUpperCase(),
+          lat: +p.latitude, lon: +p.longitude,
+        }));
+      }
+    } catch (e) { /* try next country */ }
+  }
+  return [];
+}
+function searchResultBtn(p, input, box) {
+  const btn = document.createElement("button");
+  const where = [p.admin1, p.country].filter(Boolean).join(", ");
+  const fl = flag(p.country_code);
+  btn.innerHTML = `<span>${fl ? fl + " " : ""}${p.name}</span><span class="sub">${where}</span>`;
+  btn.onclick = () => { input.value = ""; box.innerHTML = ""; loadWeather(p); };
+  return btn;
+}
+function renderResults(box, results, input) {
+  box.innerHTML = "";
+  results.forEach((p) => box.appendChild(searchResultBtn(p, input, box)));
+}
+function renderRecent(box, input) {
+  if (!recent.length) { box.innerHTML = ""; return; }
+  box.innerHTML = `<div class="results-head">Recent</div>`;
+  recent.forEach((p) => box.appendChild(searchResultBtn(p, input, box)));
+}
 function setupSearch() {
   const input = $("searchInput");
   const box = $("searchResults");
   let timer;
+  input.addEventListener("focus", () => { if (!input.value.trim()) renderRecent(box, input); });
   input.addEventListener("input", () => {
     clearTimeout(timer);
     const q = input.value.trim();
-    if (q.length < 2) { box.innerHTML = ""; return; }
+    if (q.length < 2) { renderRecent(box, input); return; }
     timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/geocode?q=${encodeURIComponent(q)}`);
-        const data = await res.json();
-        box.innerHTML = "";
-        (data.results || []).forEach((p) => {
-          const btn = document.createElement("button");
-          const where = [p.admin1, p.country].filter(Boolean).join(", ");
-          btn.innerHTML = `<span>${p.name}</span><span class="sub">${where}</span>`;
-          btn.onclick = () => {
-            input.value = "";
-            box.innerHTML = "";
-            loadWeather({
-              name: p.name, admin1: p.admin1, country: p.country,
-              country_code: p.country_code, lat: p.latitude, lon: p.longitude,
-            });
-          };
-          box.appendChild(btn);
-        });
+        let results = [];
+        if (/^\d[\d\s-]{2,}$/.test(q)) results = await zipSearch(q);   // looks like a postal code
+        if (!results.length) {
+          const data = await (await fetch(`/api/geocode?q=${encodeURIComponent(q)}`)).json();
+          results = (data.results || []).map((p) => ({
+            name: p.name, admin1: p.admin1, country: p.country,
+            country_code: p.country_code, lat: p.latitude, lon: p.longitude,
+          }));
+        }
+        renderResults(box, results, input);
       } catch (e) { /* ignore */ }
     }, 280);
   });
@@ -1590,6 +1662,7 @@ function setLoading(msg) {
 async function loadWeather(place, silent) {
   state.place = place;
   localStorage.setItem("place", JSON.stringify(place));
+  recordRecent(place);
   if (!silent) setLoading(`Loading weather for ${place.name}…`);
   try {
     const url = `/api/weather?lat=${place.lat}&lon=${place.lon}` +
@@ -1626,6 +1699,7 @@ function render(place, data) {
   renderDaily(f);
   renderAirQuality(data.air_quality, data.pollen);
   renderSun(f);
+  renderLifestyle(f, data.air_quality);
   renderMarine(data.marine);
   renderAlerts(data.alerts);
   renderNowcast(f);
@@ -2192,6 +2266,67 @@ function renderSun(f) {
       <div><div class="k">${moon.emoji} ${moon.name}</div><div class="v2">${moon.illum}% lit</div></div>
     </div>`;
 }
+// --- Lifestyle / activity indices -----------------------------------------
+// Each index is a weighted blend of factors computed from data we already have.
+function renderLifestyle(f, air) {
+  const body = $("lifestyleBody");
+  if (!body) return;
+  const c = f.current, d = f.daily;
+  const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: f.timezone });
+  let di = d.time.indexOf(todayStr); if (di < 0) di = 1;
+  const imp = state.units === "imperial";
+  const feels = c.apparent_temperature, rh = c.relative_humidity_2m, cloud = c.cloud_cover != null ? c.cloud_cover : 50;
+  const windMs = (c.wind_speed_10m || 0) * (WIND_TO_MS[fetchedWind()] || WIND_TO_MS.mph);
+  const precipNow = c.precipitation || 0;
+  const pop = d.precipitation_probability_max ? (d.precipitation_probability_max[di] || 0) : 0;
+  const uvMax = d.uv_index_max ? (d.uv_index_max[di] || 0) : 0;
+  const aq = (air && air.current) || {};
+  const aqiEU = aq.us_aqi == null && aq.european_aqi != null;
+  const aqi = aq.us_aqi != null ? aq.us_aqi : (aq.european_aqi != null ? aq.european_aqi : 0);
+  const visM = c.visibility != null ? c.visibility : hourlyNow(f, "visibility");
+  const cl = (x) => Math.max(0, Math.min(1, x));
+  const F = {
+    tempComfort: feels == null ? 0.7 : cl(1 - Math.abs(feels - (imp ? 68 : 20)) / (imp ? 24 : 13)),
+    warmth: feels == null ? 0.5 : cl((feels - (imp ? 68 : 20)) / (imp ? 17 : 9)),
+    clear: cl(1 - cloud / 100),
+    dry: precipNow > 0 ? cl(1 - precipNow / (imp ? 0.1 : 2.5)) : 1,
+    lowpop: cl(1 - pop / 100),
+    calm: windMs <= 2 ? 1 : cl(1 - (windMs - 2) / 9),
+    breeze: cl(windMs / 4),
+    aqi: aqiEU ? cl(1 - aqi / 80) : cl(1 - aqi / 150),
+    uvSafe: cl(1 - (uvMax - 2) / 8),
+    humLow: cl(1 - (rh - 40) / 50),
+    vis: visM != null ? cl(visM / 16000) : 0.8,
+    noIce: feels == null ? 1 : feels > (imp ? 34 : 1) ? 1 : feels < (imp ? 28 : -2) ? 0 : cl((feels - (imp ? 28 : -2)) / (imp ? 6 : 3)),
+    moon: cl(1 - moonPhase(new Date()).illum / 100),
+  };
+  const PH = { clear: "clouds", warmth: "cool temps", dry: "rain", lowpop: "rain chance", calm: "wind",
+    aqi: "air quality", uvSafe: "strong UV", humLow: "humidity", breeze: "still air", vis: "low visibility",
+    noIce: "icy risk", moon: "bright moon", tempComfort: "temperature" };
+  const INDICES = [
+    { name: "Stargazing", emoji: "🔭", sub: "tonight", fac: [["clear", 0.45], ["moon", 0.25], ["aqi", 0.15], ["dry", 0.15]] },
+    { name: "Running", emoji: "🏃", sub: "now", fac: [["tempComfort", 0.35], ["lowpop", 0.2], ["aqi", 0.2], ["calm", 0.15], ["uvSafe", 0.1]] },
+    { name: "Beach", emoji: "🏖️", sub: "today", fac: [["warmth", 0.3], ["clear", 0.25], ["lowpop", 0.25], ["calm", 0.2]] },
+    { name: "Gardening", emoji: "🪴", sub: "now", fac: [["tempComfort", 0.4], ["dry", 0.25], ["calm", 0.2], ["aqi", 0.15]] },
+    { name: "Line-dry", emoji: "🧺", sub: "laundry", fac: [["lowpop", 0.4], ["humLow", 0.3], ["breeze", 0.15], ["clear", 0.15]] },
+    { name: "Commute", emoji: "🚗", sub: "now", fac: [["vis", 0.3], ["dry", 0.3], ["calm", 0.2], ["noIce", 0.2]] },
+  ];
+  const tierOf = (s) => s >= 78 ? { t: "Great", c: "#7ed957" } : s >= 55 ? { t: "Good", c: "#a3e635" }
+    : s >= 30 ? { t: "Fair", c: "#ffd45e" } : { t: "Poor", c: "#ff8a5f" };
+  body.innerHTML = INDICES.map((ix) => {
+    let sum = 0, wsum = 0, worst = null;
+    ix.fac.forEach(([k, w]) => { const v = F[k]; sum += v * w; wsum += w; if (!worst || v < worst.v) worst = { k, v }; });
+    const score = Math.round(100 * sum / wsum);
+    const tier = tierOf(score);
+    const reason = score >= 78 ? "Excellent conditions" : `Held back by ${PH[worst.k] || worst.k}`;
+    return `<div class="life" title="${ix.name} (${ix.sub}): ${reason}">
+      <div class="life-top"><span class="life-emoji">${ix.emoji}</span><span class="life-score" style="color:${tier.c}">${score}</span></div>
+      <div class="life-name">${ix.name}<span class="life-sub">${ix.sub}</span></div>
+      <div class="life-bar"><i style="width:${score}%;background:${tier.c}"></i></div>
+      <div class="life-reason"><b style="color:${tier.c}">${tier.t}</b> · ${reason}</div>
+    </div>`;
+  }).join("");
+}
 // --- Marine conditions ----------------------------------------------------
 function renderMarine(marine) {
   const card = $("marineCard");
@@ -2263,7 +2398,35 @@ function renderNowcast(f) {
     sub = "Skies look clear of precipitation for now.";
   }
   box.className = cls;
-  box.innerHTML = `<span class="nc-icon">${icon}</span><span>${title}<br><span class="nc-sub">${sub}</span></span>`;
+  box.innerHTML = `<div class="nc-main"><span class="nc-icon">${icon}</span>` +
+    `<span>${title}<br><span class="nc-sub">${sub}</span></span></div>` +
+    minutecastGraph(steps, thr);
+}
+// Minutecast: a small bar chart of precipitation over the next ~2 hours
+// (Open-Meteo 15-min data). Only shown when precip is actually in the window.
+function minutecastGraph(steps, thr) {
+  if (!steps || steps.length < 2) return "";
+  const peak = Math.max(...steps.map((s) => s.p || 0));
+  if (peak <= thr) return ""; // dry — the banner already says "all clear"
+  const imp = state.units === "imperial";
+  const W = 300, H = 48, base = H - 12, pad = 3;
+  const n = steps.length, bw = (W - pad * 2) / n;
+  const scale = Math.max(peak, thr * 5);
+  const heavy = imp ? 0.1 : 2.5, moderate = imp ? 0.02 : 0.5;
+  const bars = steps.map((s, k) => {
+    const p = s.p || 0;
+    const h = p > thr ? Math.max(2.5, (p / scale) * base) : 0;
+    const x = pad + k * bw;
+    const col = p > heavy ? "#ff6b6b" : p > moderate ? "#ffd45e" : "#5fa8ff";
+    return `<rect x="${(x + 1).toFixed(1)}" y="${(base - h).toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${col}"><title>${clk(new Date(s.t))} · ${r1(p)} ${precU()}</title></rect>`;
+  }).join("");
+  return `<div class="nc-graph">
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Precipitation, next 2 hours">
+      <line x1="${pad}" y1="${base}" x2="${W - pad}" y2="${base}" stroke="rgba(255,255,255,0.18)" stroke-width="1"/>
+      ${bars}
+    </svg>
+    <div class="nc-graph-x"><span>Now</span><span>+1h</span><span>+2h</span></div>
+  </div>`;
 }
 // --- Historical reference -------------------------------------------------
 async function loadHistory(place, todayHigh, todayLow) {

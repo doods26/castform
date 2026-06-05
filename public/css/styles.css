@@ -104,6 +104,7 @@ header.topbar {
 .results button:hover { background: var(--glass-strong); }
 .results .sub { color: var(--muted); font-size: 0.82rem; }
 .results:empty { display: none; }
+.results-head { padding: 9px 15px 4px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.8px; color: var(--faint); font-weight: 700; }
 
 .toolbar { display: flex; gap: 8px; align-items: center; }
 .btn {
@@ -430,12 +431,17 @@ body.radar-fs-open { overflow: hidden; }
 
 /* Nowcast banner ---------------------------------------------------------- */
 .nowcast {
-  display: flex; align-items: center; gap: 12px; margin-bottom: 18px;
+  display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px;
   padding: 13px 18px; border-radius: 16px; font-size: 1rem; font-weight: 600;
   background: linear-gradient(100deg, rgba(95,168,255,0.22), rgba(95,168,255,0.06));
   border: 1px solid rgba(95,168,255,0.4); backdrop-filter: blur(12px);
   animation: fadeIn 0.5s ease both;
 }
+.nc-main { display: flex; align-items: center; gap: 12px; }
+.nc-graph { display: flex; flex-direction: column; gap: 2px; }
+.nc-graph svg { width: 100%; height: 48px; display: block; }
+.nc-graph-x { display: flex; justify-content: space-between; font-size: 0.66rem;
+  font-weight: 600; color: var(--faint); padding: 0 2px; }
 .nowcast.dry { background: linear-gradient(100deg, rgba(126,217,87,0.16), rgba(126,217,87,0.04)); border-color: rgba(126,217,87,0.35); }
 .nowcast.hidden { display: none; }
 .nowcast .nc-icon { font-size: 1.5rem; line-height: 1; animation: bob 2s ease-in-out infinite; }
@@ -546,6 +552,18 @@ body.radar-fs-open { overflow: hidden; }
 .fav-ico .wxicon { width: 20px; height: 20px; }
 .fav-temp { font-weight: 700; color: var(--text); }
 .fav-chip .fav-name { font-weight: 500; }
+
+/* Lifestyle / activity indices */
+.life-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.life { background: rgba(255,255,255,0.05); border: 1px solid var(--stroke); border-radius: 14px; padding: 12px 13px; }
+.life-top { display: flex; align-items: center; justify-content: space-between; }
+.life-emoji { font-size: 1.4rem; }
+.life-score { font-size: 1.5rem; font-weight: 800; line-height: 1; }
+.life-name { font-weight: 700; margin-top: 4px; }
+.life-name .life-sub { font-weight: 500; color: var(--faint); font-size: 0.72rem; margin-left: 6px; }
+.life-bar { height: 5px; border-radius: 3px; background: rgba(255,255,255,0.1); overflow: hidden; margin: 8px 0 6px; }
+.life-bar i { display: block; height: 100%; border-radius: 3px; }
+.life-reason { font-size: 0.74rem; color: var(--muted); }
 
 /* Settings overlay + panel */
 .settings-overlay { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center;

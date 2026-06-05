@@ -432,6 +432,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", MIME.get(path.suffix, "application/octet-stream"))
         self.send_header("Content-Length", str(len(data)))
+        # Dev server: don't let the browser cache app assets (ES modules cache
+        # by URL, which otherwise serves stale JS after an edit). The service
+        # worker still handles caching for the deployed/standalone build.
+        self.send_header("Cache-Control", "no-cache, must-revalidate")
         self.end_headers()
         self.wfile.write(data)
 
