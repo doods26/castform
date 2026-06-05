@@ -158,5 +158,33 @@ class MobilePwaTests(unittest.TestCase):
         self.assertRegex(block.group(1), r"\.search input\s*\{[^}]*font-size:\s*16px")
 
 
+class ActivityHintTests(unittest.TestCase):
+    """Guard the forward-looking activity-outlook banner wiring."""
+
+    def _app_js(self):
+        return (PUB / "js" / "app.js").read_text(encoding="utf-8")
+
+    def test_banner_element_present(self):
+        html = (PUB / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="activityHint"', html)
+
+    def test_render_and_decision_functions_defined(self):
+        js = self._app_js()
+        self.assertRegex(js, r"function renderActivityHint\(")
+        self.assertRegex(js, r"function activityOutlook\(")
+
+    def test_hint_rendered_on_both_paths(self):
+        # Must fire on initial render AND on a unit-only rerender, or the banner
+        # goes stale (e.g. shows °F thresholds after switching to °C).
+        js = self._app_js()
+        self.assertGreaterEqual(len(re.findall(r"renderActivityHint\(f\)", js)), 2,
+                                "renderActivityHint must run on both render and rerender")
+
+    def test_outlook_bundled_into_standalone(self):
+        # The decision logic must survive into the inlined static build.
+        bundle = (ROOT / "standalone.html").read_text(encoding="utf-8")
+        self.assertIn("activityOutlook", bundle)
+
+
 if __name__ == "__main__":
     unittest.main()

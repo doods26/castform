@@ -82,6 +82,7 @@ function rerender() {
   renderDaily(f);
   renderSun(f);
   renderLifestyle(f, state.lastData.air_quality);
+  renderActivityHint(f);
 }
 
 // --- Boot -----------------------------------------------------------------
@@ -345,6 +346,7 @@ function render(place, data) {
   renderMarine(data.marine);
   renderAlerts(data.alerts);
   renderNowcast(f);
+  renderActivityHint(f);
   maybeNotify(place, f, data.alerts);
   renderFavorites();
   // Radar map (created once, re-centered on each location change).
@@ -1125,6 +1127,138 @@ function minutecastGraph(steps, thr) {
     </svg>
     <div class="nc-graph-x"><span>Now</span><span>+1h</span><span>+2h</span></div>
   </div>`;
+}
+
+// --- Activity outlook (plain-language hint for the next few hours) ---------
+// A single, human-readable "what should I do" read derived from the hourly
+// forecast window — e.g. "Rain likely around 3 PM — a good window for indoor
+// plans" or "Clear and mild for the next few hours — perfect for a walk."
+// Surfaced as a prominent banner (most useful on mobile, where the index grid
+// is far down the page).
+const WMO_WET = (c) => (c >= 51 && c <= 67) || (c >= 80 && c <= 82);
+const WMO_SNOW = (c) => (c >= 71 && c <= 77) || c === 85 || c === 86;
+const WMO_STORM = (c) => c >= 95;
+
+function renderActivityHint(f) {
+  const box = $("activityHint");
+  if (!box) return;
+  const h = f.hourly;
+  if (!h || !h.time || !h.time.length) { box.classList.add("hidden"); return; }
+  const now = Date.now();
+  let i0 = h.time.findIndex((t) => new Date(t).getTime() >= now - 30 * 60000);
+  if (i0 < 0) i0 = 0;
+  const HORIZON = 6; // hours ahead to characterize
+  const wmul = WIND_TO_MS[fetchedWind()] || WIND_TO_MS.mph;
+  const win = [];
+  for (let i = i0; i < Math.min(h.time.length, i0 + HORIZON); i++) {
+    win.push({
+      t: new Date(h.time[i]).getTime(),
+      pop: h.precipitation_probability ? (h.precipitation_probability[i] || 0) : 0,
+      precip: h.precipitation ? (h.precipitation[i] || 0) : 0,
+      code: h.weather_code ? h.weather_code[i] : 0,
+      feels: h.apparent_temperature ? h.apparent_temperature[i]
+        : (h.temperature_2m ? h.temperature_2m[i] : null),
+      uv: h.uv_index ? (h.uv_index[i] || 0) : 0,
+      wind: (h.wind_speed_10m ? (h.wind_speed_10m[i] || 0) : 0) * wmul,
+      day: h.is_day ? h.is_day[i] === 1 : true,
+    });
+  }
+  if (!win.length) { box.classList.add("hidden"); return; }
+  const out = activityOutlook(win, state.units === "imperial");
+  box.className = `activity-hint ${out.tone}`;
+  box.innerHTML = `<span class="ah-icon" aria-hidden="true">${out.emoji}</span>` +
+    `<span class="ah-text"><b>${out.title}</b>` +
+    (out.detail ? `<span class="ah-sub">${out.detail}</span>` : "") + `</span>`;
+}
+
+// Pure decision cascade: given a window of hourly samples (and the unit system)
+// return { emoji, title, detail, tone }. Ordered most-actionable first.
+function activityOutlook(win, imp) {
+  const at = (t) => clk(new Date(t), false);
+  const wetTrace = imp ? 0.004 : 0.1;               // ~trace precip, per hour
+  const hotT = imp ? 90 : 32, coldT = imp ? 36 : 2; // feels-like thresholds
+  const windHi = 9, uvHi = 6;                       // m/s (~20 mph), UV index
+  const isWet = (s) => WMO_WET(s.code) || WMO_SNOW(s.code) || WMO_STORM(s.code)
+    || s.pop >= 55 || s.precip > wetTrace;
+
+  const firstWet = win.find(isWet);
+  const nowWet = isWet(win[0]);
+  let run = 0; while (run < win.length && isWet(win[run])) run++;  // wet hours from now
+  const clearsWithin = nowWet && run < win.length;
+  const stormy = win.some((s) => WMO_STORM(s.code));
+  const snowy = win.some((s) => WMO_SNOW(s.code)
+    || (s.precip > wetTrace && s.feels != null && s.feels <= (imp ? 34 : 1)));
+  const maxPop = Math.max(...win.map((s) => s.pop));
+  const maxUV = Math.max(...win.map((s) => s.uv));
+  const maxWind = Math.max(...win.map((s) => s.wind));
+  const feelsVals = win.map((s) => s.feels).filter((v) => v != null);
+  const feelsMax = feelsVals.length ? Math.max(...feelsVals) : null;
+  const dayMost = win.filter((s) => s.day).length >= win.length / 2;
+  const hrs = (n) => `${n} ${n === 1 ? "hour" : "hours"}`;
+
+  // 1) Thunderstorms — strongest signal, keep people in.
+  if (stormy) {
+    const s = win.find((x) => WMO_STORM(x.code));
+    return { emoji: "⛈️", tone: "ah-bad",
+      title: `Thunderstorms ${nowWet ? "right now" : `likely around ${at(s.t)}`} — keep plans indoors`,
+      detail: "Best to hold off on anything outdoors until the storms pass." };
+  }
+  // 2) Snow
+  if (snowy) {
+    const s = win.find((x) => WMO_SNOW(x.code)) || firstWet;
+    return { emoji: "🌨️", tone: "ah-cool",
+      title: nowWet ? "Snow falling — a cozy day for indoor plans"
+                    : `Snow likely around ${at(s.t)}`,
+      detail: "Roads may be slick; bundle up well if you head out." };
+  }
+  // 3) Raining now
+  if (nowWet) {
+    if (clearsWithin) {
+      return { emoji: "🌧️", tone: "ah-wet",
+        title: `Wet now, easing around ${at(win[run].t)}`,
+        detail: "Good window for indoor activities — it opens up for outdoor plans after that." };
+    }
+    return { emoji: "🌧️", tone: "ah-wet",
+      title: `Wet for the next ${hrs(run)}`,
+      detail: "A good stretch for indoor plans — errands, a café, or a workout inside." };
+  }
+  // 4) Dry now, rain coming later in the window
+  if (firstWet) {
+    return { emoji: "🌦️", tone: "ah-wet",
+      title: `Dry for now — rain likely around ${at(firstWet.t)}`,
+      detail: "Get outdoor plans in early, then keep an indoor backup ready." };
+  }
+  if (maxPop >= 35) {
+    return { emoji: "🌥️", tone: "ah-neutral",
+      title: "Mostly dry, with a chance of showers",
+      detail: "Outdoor plans should be fine — maybe pack a backup just in case." };
+  }
+  // 5) Dry window — characterize comfort.
+  if (feelsMax != null && feelsMax >= hotT && maxUV >= uvHi) {
+    return { emoji: "🥵", tone: "ah-hot",
+      title: "Hot with strong sun for the next few hours",
+      detail: "Head out early or toward evening, hydrate, and wear sunscreen." };
+  }
+  if (feelsMax != null && feelsMax <= coldT) {
+    return { emoji: "🧥", tone: "ah-cool",
+      title: "Cold for the next few hours",
+      detail: "Bundle up well for anything outdoors — or keep it indoors." };
+  }
+  if (maxWind >= windHi) {
+    return { emoji: "🌬️", tone: "ah-neutral",
+      title: "Breezy for a while",
+      detail: "Fine for a brisk walk; less ideal for cycling, the beach, or umbrellas." };
+  }
+  if (!dayMost) {
+    return { emoji: "🌙", tone: "ah-good",
+      title: "Clear and calm this evening",
+      detail: `Nice for a stroll${maxUV < 1 ? " or a bit of stargazing." : "."}` };
+  }
+  // Pleasant daytime
+  return { emoji: "😎", tone: "ah-good",
+    title: "Great few hours for outdoor plans",
+    detail: "Comfortable and dry — perfect for a walk, a run, or time outside."
+      + (maxUV >= uvHi ? " Grab sunscreen if you'll be out a while." : "") };
 }
 
 // --- Historical reference -------------------------------------------------
