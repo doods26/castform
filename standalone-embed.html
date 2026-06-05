@@ -272,6 +272,8 @@ header.topbar {
   border-top: 1px solid var(--stroke); font-size: 0.8rem; color: var(--muted); }
 /* Radar full-screen overlay */
 body.radar-fs-open { overflow: hidden; }
+/* Lock the page behind the settings sheet so iOS doesn't scroll-chain it. */
+body.settings-open { overflow: hidden; }
 .radar-card.radar-fullscreen {
   position: fixed; inset: 0; z-index: 1000; margin: 0; border-radius: 0;
   display: flex; flex-direction: column;
@@ -587,10 +589,14 @@ body.radar-fs-open { overflow: hidden; }
 .life-reason { font-size: 0.74rem; color: var(--muted); }
 /* Settings overlay + panel */
 .settings-overlay { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center;
-  justify-content: center; padding: 20px; background: rgba(6,10,20,0.6); backdrop-filter: blur(6px);
+  justify-content: center; background: rgba(6,10,20,0.6); backdrop-filter: blur(6px);
+  /* Keep the panel clear of the notch (top) &amp; home indicator (bottom) on iOS. */
+  padding: calc(20px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom));
   animation: fadeIn .2s ease both; }
 .settings-overlay.hidden { display: none; }
-.settings-panel { width: 100%; max-width: 460px; max-height: 88vh; overflow-y: auto;
+.settings-panel { width: 100%; max-width: 460px; max-height: 88dvh; overflow-y: auto;
+  /* Contain the scroll so it doesn't chain to the page behind (iOS PWA bug). */
+  overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
   background: linear-gradient(180deg, #1a2740, #121b30); border: 1px solid var(--stroke);
   border-radius: 20px; box-shadow: var(--shadow); padding: 18px 20px 20px; }
 .settings-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
@@ -667,8 +673,9 @@ body.radar-fs-open { overflow: hidden; }
   /* Sun arc must not overflow the narrow card */
   .sun-arc { width: 100%; max-width: 240px; }
   /* Settings panel: let rows wrap so segmented controls don't overflow */
-  .settings-overlay { padding: 12px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); align-items: flex-end; }
-  .settings-panel { max-height: 92vh; border-radius: 18px; }
+  .settings-overlay { align-items: flex-end;
+    padding: calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom)); }
+  .settings-panel { max-height: 88dvh; border-radius: 18px; }
   .set-row { flex-wrap: wrap; gap: 8px; }
   .set-row > label { flex: 1 1 100%; }
   .set-seg { justify-content: flex-start; }
@@ -2842,11 +2849,16 @@ function seg(key, value) {
 function setupSettings() {
   const btn = $(&quot;settingsBtn&quot;), overlay = $(&quot;settingsOverlay&quot;);
   if (!btn || !overlay) return;
-  btn.onclick = () => { renderSettings(); overlay.classList.remove(&quot;hidden&quot;); };
+  // Toggle a body class so the page behind is scroll-locked — without it iOS
+  // scroll-chains the page and the settings sheet barely scrolls (its lower
+  // rows become unreachable in the installed PWA).
+  const open = () => { renderSettings(); overlay.classList.remove(&quot;hidden&quot;); document.body.classList.add(&quot;settings-open&quot;); };
+  const close = () => { overlay.classList.add(&quot;hidden&quot;); document.body.classList.remove(&quot;settings-open&quot;); };
+  btn.onclick = open;
   overlay.addEventListener(&quot;click&quot;, (e) => {
-    if (e.target === overlay || e.target.closest(&quot;[data-close]&quot;)) overlay.classList.add(&quot;hidden&quot;);
+    if (e.target === overlay || e.target.closest(&quot;[data-close]&quot;)) close();
   });
-  document.addEventListener(&quot;keydown&quot;, (e) => { if (e.key === &quot;Escape&quot;) overlay.classList.add(&quot;hidden&quot;); });
+  document.addEventListener(&quot;keydown&quot;, (e) => { if (e.key === &quot;Escape&quot; &amp;&amp; !overlay.classList.contains(&quot;hidden&quot;)) close(); });
 }
 function renderSettings() {
   const body = $(&quot;settingsBody&quot;);

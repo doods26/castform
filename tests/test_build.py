@@ -186,5 +186,35 @@ class ActivityHintTests(unittest.TestCase):
         self.assertIn("activityOutlook", bundle)
 
 
+class SettingsSheetTests(unittest.TestCase):
+    """Guard the iOS-PWA settings-sheet fixes (scroll-lock + reachable rows)."""
+
+    def test_background_scroll_locked_when_open(self):
+        css = (PUB / "css" / "styles.css").read_text(encoding="utf-8")
+        self.assertRegex(css, r"body\.settings-open\s*\{[^}]*overflow:\s*hidden")
+
+    def test_panel_scroll_is_contained(self):
+        # overscroll-behavior keeps touch scroll from chaining to the page.
+        css = (PUB / "css" / "styles.css").read_text(encoding="utf-8")
+        self.assertRegex(css, r"\.settings-panel\s*\{[^}]*overscroll-behavior:\s*contain")
+
+    def test_panel_uses_dynamic_viewport(self):
+        # dvh (not vh) so the sheet's lower rows clear the iOS home indicator.
+        css = (PUB / "css" / "styles.css").read_text(encoding="utf-8")
+        self.assertNotRegex(css, r"\.settings-panel[^{]*\{[^}]*max-height:\s*\d+vh")
+        self.assertIn("88dvh", css)
+
+    def test_js_toggles_scroll_lock_class(self):
+        js = (PUB / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('classList.add("settings-open")', js)
+        self.assertIn('classList.remove("settings-open")', js)
+
+    def test_sw_serves_html_network_first(self):
+        # Otherwise the installed PWA serves a stale index.html and never picks
+        # up new cache-busted CSS/JS — the reason updates didn't reach the app.
+        sw = (PUB / "sw.js").read_text(encoding="utf-8")
+        self.assertIn('req.mode === "navigate"', sw)
+
+
 if __name__ == "__main__":
     unittest.main()

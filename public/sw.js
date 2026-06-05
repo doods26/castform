@@ -6,7 +6,7 @@
 //     falling back to cache — so an offline launch shows the last forecast.
 //
 // Bump VERSION to invalidate old caches on deploy.
-const VERSION = "castform-v1";
+const VERSION = "castform-v2";
 
 // Files to pre-cache. Some only exist on the dev server (split CSS/JS), others
 // only on the bundled GitHub Pages build — failures are ignored individually.
@@ -43,7 +43,18 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // App shell / static → cache-first, then network, then index.html fallback.
+  // HTML navigations → network-first, so a new index.html (and the freshly
+  // cache-busted CSS/JS it points to) lands as soon as the device is online.
+  // Falls back to the cached shell when offline.
+  if (req.mode === "navigate") {
+    e.respondWith(
+      fetch(req).then((res) => cachePut(req, res))
+        .catch(() => caches.match(req).then((hit) => hit || caches.match("./index.html")))
+    );
+    return;
+  }
+
+  // Other same-origin static (CSS/JS/icons, cache-busted by ?b=) → cache-first.
   e.respondWith(
     caches.match(req).then((hit) =>
       hit || fetch(req).then((res) => cachePut(req, res)).catch(() => caches.match("./index.html")))

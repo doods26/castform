@@ -1453,11 +1453,16 @@ function seg(key, value) {
 function setupSettings() {
   const btn = $("settingsBtn"), overlay = $("settingsOverlay");
   if (!btn || !overlay) return;
-  btn.onclick = () => { renderSettings(); overlay.classList.remove("hidden"); };
+  // Toggle a body class so the page behind is scroll-locked — without it iOS
+  // scroll-chains the page and the settings sheet barely scrolls (its lower
+  // rows become unreachable in the installed PWA).
+  const open = () => { renderSettings(); overlay.classList.remove("hidden"); document.body.classList.add("settings-open"); };
+  const close = () => { overlay.classList.add("hidden"); document.body.classList.remove("settings-open"); };
+  btn.onclick = open;
   overlay.addEventListener("click", (e) => {
-    if (e.target === overlay || e.target.closest("[data-close]")) overlay.classList.add("hidden");
+    if (e.target === overlay || e.target.closest("[data-close]")) close();
   });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") overlay.classList.add("hidden"); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !overlay.classList.contains("hidden")) close(); });
 }
 
 function renderSettings() {
