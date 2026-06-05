@@ -47,16 +47,19 @@ body.light .results { background: rgba(255, 255, 255, 0.97); }
 body.light .settings-panel { background: linear-gradient(180deg, #ffffff, #eef3fb); }
 body.light .update-toast { background: rgba(255, 255, 255, 0.96); color: var(--text); }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html { height: 100%; }
+html { height: 100%; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body {
   position: relative;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   color: var(--text);
   background: linear-gradient(160deg, var(--bg-a), var(--bg-b));
   min-height: 100vh;
+  min-height: 100dvh;            /* dvh tracks iOS Safari's collapsing toolbar */
   overflow-x: hidden;
   transition: background 1.2s ease;
   -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;   /* no grey flash box on tap (iOS) */
+  overscroll-behavior-y: none;                 /* kill rubber-band white flash */
 }
 /* Animated sky themes ----------------------------------------------------- */
 body[data-theme="clear"]   { --bg-a:#2b6fd6; --bg-b:#0f3a7a; }
@@ -105,7 +108,11 @@ body[data-night="1"] .stars { opacity: 1; }
   animation: twinkle var(--tw, 3s) ease-in-out infinite; animation-delay: var(--td, 0s); }
 @keyframes twinkle { 0%,100% { opacity: 0.15; transform: scale(0.8); } 50% { opacity: 0.9; transform: scale(1.2); } }
 /* Layout ------------------------------------------------------------------ */
-.app { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 26px 22px 70px; }
+.app { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto;
+  /* Respect the iPhone notch / Dynamic Island (top) & home indicator (bottom).
+     status-bar-style is black-translucent, so content renders under the bar. */
+  padding: calc(26px + env(safe-area-inset-top)) calc(22px + env(safe-area-inset-right))
+           calc(70px + env(safe-area-inset-bottom)) calc(22px + env(safe-area-inset-left)); }
 header.topbar {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
   margin-bottom: 22px;
@@ -267,7 +274,9 @@ header.topbar {
 body.radar-fs-open { overflow: hidden; }
 .radar-card.radar-fullscreen {
   position: fixed; inset: 0; z-index: 1000; margin: 0; border-radius: 0;
-  display: flex; flex-direction: column; padding: 14px 16px;
+  display: flex; flex-direction: column;
+  padding: calc(14px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right))
+           calc(14px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
   background: #0b1020; box-shadow: none;
 }
 .radar-card.radar-fullscreen .radar-map-wrap { flex: 1 1 auto; height: auto; border-radius: 14px; }
@@ -411,7 +420,7 @@ body.radar-fs-open { overflow: hidden; }
 .cmp-stats { display: flex; flex-wrap: wrap; gap: 8px 14px; justify-content: center; font-size: 0.85rem; color: var(--muted); }
 .cmp-close { position: absolute; top: 8px; right: 8px; padding: 4px 10px; }
 /* Update toast */
-.update-toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px);
+.update-toast { position: fixed; bottom: calc(22px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%) translateY(20px);
   background: rgba(20,28,48,0.95); border: 1px solid var(--stroke); color: var(--text);
   padding: 10px 18px; border-radius: 12px; font-size: 0.85rem; font-weight: 600; z-index: 900;
   opacity: 0; pointer-events: none; transition: opacity .4s, transform .4s; box-shadow: var(--shadow); }
@@ -601,7 +610,8 @@ body.radar-fs-open { overflow: hidden; }
    ============================================================ */
 /* Tablets & large phones — stack the header so the search gets a full row */
 @media (max-width: 760px) {
-  .app { padding: 18px 14px 60px; }
+  .app { padding: calc(18px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right))
+                  calc(60px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left)); }
   header.topbar { gap: 10px 8px; margin-bottom: 16px; }
   .brand { order: 1; }
   .toolbar { order: 2; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
@@ -615,6 +625,8 @@ body.radar-fs-open { overflow: hidden; }
   /* Trim the toolbar: kiosk fullscreen isn't useful on iOS; tighten buttons */
   #fullscreenBtn { display: none; }
   .btn { padding: 9px 11px; font-size: 0.85rem; }
+  /* iOS auto-zooms the page when focusing an input under 16px. Pin to 16px. */
+  .search input { font-size: 16px; }
   /* Hero — center the stack, smaller gauge */
   .cur-main { gap: 12px; }
   .hero-gauge .gauge { max-width: 152px; }
@@ -633,7 +645,7 @@ body.radar-fs-open { overflow: hidden; }
   /* Sun arc must not overflow the narrow card */
   .sun-arc { width: 100%; max-width: 240px; }
   /* Settings panel: let rows wrap so segmented controls don't overflow */
-  .settings-overlay { padding: 12px; align-items: flex-end; }
+  .settings-overlay { padding: 12px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); align-items: flex-end; }
   .settings-panel { max-height: 92vh; border-radius: 18px; }
   .set-row { flex-wrap: wrap; gap: 8px; }
   .set-row > label { flex: 1 1 100%; }
@@ -641,7 +653,8 @@ body.radar-fs-open { overflow: hidden; }
 }
 /* Small phones (iPhone mini / SE width) */
 @media (max-width: 400px) {
-  .app { padding: 14px 11px 54px; }
+  .app { padding: calc(14px + env(safe-area-inset-top)) calc(11px + env(safe-area-inset-right))
+                  calc(54px + env(safe-area-inset-bottom)) calc(11px + env(safe-area-inset-left)); }
   .brand-name { font-size: 1.05rem; }
   .toolbar { gap: 6px; }
   .hero-today .htv { font-size: 0.95rem; }
