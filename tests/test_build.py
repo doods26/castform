@@ -117,5 +117,46 @@ class ReferencedModulesExistTests(unittest.TestCase):
                 self.assertTrue((PUB / rel).is_file(), f"index.html references missing: {rel}")
 
 
+class MobilePwaTests(unittest.TestCase):
+    """Guard the iPhone/PWA mobile optimizations from silently regressing."""
+
+    def _html(self):
+        return (PUB / "index.html").read_text(encoding="utf-8")
+
+    def _css(self):
+        return (PUB / "css" / "styles.css").read_text(encoding="utf-8")
+
+    def test_viewport_opts_into_safe_area(self):
+        # viewport-fit=cover is what lets env(safe-area-inset-*) report real
+        # values on notched iPhones; without it the insets are always 0.
+        self.assertIn("viewport-fit=cover", self._html())
+
+    def test_apple_pwa_meta_present(self):
+        html = self._html()
+        for needle in ('name="apple-mobile-web-app-capable"',
+                       'rel="apple-touch-icon"',
+                       'rel="manifest"'):
+            self.assertIn(needle, html, f"missing PWA meta/link: {needle}")
+
+    def test_css_respects_safe_area_insets(self):
+        # The notch / Dynamic Island / home-indicator handling. If someone
+        # strips these, content slides under the iPhone status bar again.
+        css = self._css()
+        self.assertIn("env(safe-area-inset-top)", css)
+        self.assertIn("env(safe-area-inset-bottom)", css)
+
+    def test_css_uses_dynamic_viewport_height(self):
+        # 100dvh tracks iOS Safari's collapsing toolbar; 100vh overshoots it.
+        self.assertIn("100dvh", self._css())
+
+    def test_mobile_inputs_avoid_ios_focus_zoom(self):
+        # iOS zooms the whole page when focusing an input rendered under 16px.
+        # The phones breakpoint pins the search inputs to 16px to prevent it.
+        css = self._css()
+        block = re.search(r"@media \(max-width: 600px\) \{(.*?)\n\}", css, re.S)
+        self.assertIsNotNone(block, "phones (max-width:600px) breakpoint missing")
+        self.assertRegex(block.group(1), r"\.search input\s*\{[^}]*font-size:\s*16px")
+
+
 if __name__ == "__main__":
     unittest.main()
