@@ -174,6 +174,20 @@ AQI_BASE = "https://air-quality-api.open-meteo.com/v1/air-quality"
 GEOCODE_BASE = "https://geocoding-api.open-meteo.com/v1/search"
 REVERSE_BASE = "https://api.bigdatacloud.net/data/reverse-geocode-client"
 NWS_ALERTS = "https://api.weather.gov/alerts/active"
+# MeteoAlarm (free CAP feeds, Europe). No CORS headers, so this only works
+# server-side — the browser-only standalone build can't call it directly.
+METEOALARM_BASE = "https://feeds.meteoalarm.org/api/v1/warnings/feeds-"
+METEOALARM_SLUGS = {
+    "AT": "austria", "BE": "belgium", "BA": "bosnia-herzegovina", "BG": "bulgaria",
+    "HR": "croatia", "CY": "cyprus", "CZ": "czechia", "DK": "denmark", "EE": "estonia",
+    "FI": "finland", "FR": "france", "DE": "germany", "GR": "greece", "HU": "hungary",
+    "IS": "iceland", "IE": "ireland", "IL": "israel", "IT": "italy", "LV": "latvia",
+    "LT": "lithuania", "LU": "luxembourg", "MT": "malta", "MD": "moldova",
+    "ME": "montenegro", "NL": "netherlands", "MK": "north-macedonia", "NO": "norway",
+    "PL": "poland", "PT": "portugal", "RO": "romania", "RS": "serbia", "SK": "slovakia",
+    "SI": "slovenia", "ES": "spain", "SE": "sweden", "CH": "switzerland",
+    "GB": "united-kingdom",
+}
 RAINVIEWER = "https://api.rainviewer.com/public/weather-maps.json"
 
 CURRENT_FIELDS = ",".join([
@@ -385,6 +399,87 @@ def get_alerts(lat, lon):
     return out
 
 
+def _point_in_polygon(px, py, poly_str):
+    """Ray-casting test. poly_str is space-separated 'lat,lon' pairs."""
+    pts = []
+    for tok in poly_str.split():
+        if "," not in tok:
+            continue
+        a, b = tok.split(",")[:2]
+        try:
+            pts.append((float(b), float(a)))  # (lon, lat) -> (x, y)
+        except ValueError:
+            continue
+    n = len(pts)
+    if n < 3:
+        return False
+    inside = False
+    j = n - 1
+    for i in range(n):
+        xi, yi = pts[i]
+        xj, yj = pts[j]
+        if ((yi > py) != (yj > py)) and (px < (xj - xi) * (py - yi) / ((yj - yi) or 1e-12) + xi):
+            inside = not inside
+        j = i
+    return inside
+
+
+def _area_name_match(area_desc, admin1):
+    """Best-effort match for warnings that carry a region name but no polygon
+    (e.g. NUTS-coded countries). Conservative: only matches on a clear overlap."""
+    if not area_desc or not admin1:
+        return False
+    a, b = area_desc.strip().lower(), admin1.strip().lower()
+    return len(a) >= 3 and len(b) >= 3 and (a in b or b in a)
+
+
+def meteoalarm_alerts(lat, lon, cc, admin1=None):
+    """European severe-weather warnings (MeteoAlarm) for the point. [] if none.
+
+    Precise where the feed provides polygons (point-in-polygon); for feeds that
+    only carry region names (NUTS), falls back to a conservative name match so
+    it never raises a false alarm — it just stays silent when it can't be sure.
+    """
+    slug = METEOALARM_SLUGS.get(cc)
+    if not slug:
+        return []
+    try:
+        data = fetch_json(METEOALARM_BASE + slug, ttl=600)
+        px, py = float(lon), float(lat)
+    except Exception:
+        return []
+    out, seen = [], set()
+    for w in data.get("warnings", []):
+        alert = w.get("alert") or {}
+        infos = alert.get("info") or []
+        eng = [i for i in infos if str(i.get("language", "")).lower().startswith("en")]
+        for info in (eng or infos):
+            areas = info.get("area") or []
+            hit = any(_point_in_polygon(px, py, poly)
+                      for a in areas for poly in (a.get("polygon") or []))
+            if not hit:
+                hit = any(_area_name_match(a.get("areaDesc"), admin1)
+                          for a in areas if not a.get("polygon"))
+            if not hit:
+                continue
+            event = info.get("event") or alert.get("incidents")
+            key = (event, info.get("onset"), info.get("expires"))
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append({
+                "event": event,
+                "severity": (info.get("severity") or "").title() or None,
+                "urgency": info.get("urgency"), "certainty": info.get("certainty"),
+                "headline": info.get("headline") or (info.get("description") or "")[:140],
+                "description": info.get("description"), "instruction": info.get("instruction"),
+                "sender": info.get("senderName") or "MeteoAlarm",
+                "effective": info.get("effective") or info.get("onset"),
+                "expires": info.get("expires"),
+            })
+    return out
+
+
 def reverse_geocode(lat, lon, lang="en"):
     try:
         params = {"latitude": lat, "longitude": lon, "localityLanguage": lang}
@@ -562,6 +657,8 @@ class Handler(BaseHTTPRequestHandler):
                 forecast = get_forecast(lat, lon, temp_unit, wind_unit, precip_unit)
                 air = get_air_quality(lat, lon)
                 alerts = get_alerts(lat, lon) if cc in ("US", "") else []
+                if not alerts and cc not in ("US", ""):
+                    alerts = meteoalarm_alerts(lat, lon, cc, arg("admin1"))
                 marine = get_marine(lat, lon, temp_unit)
                 pollen = get_pollen(lat, lon)
 

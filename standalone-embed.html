@@ -1735,7 +1735,8 @@ async function loadWeather(place, silent) {
   if (!silent) setLoading(`Loading weather for ${place.name}…`);
   try {
     const url = `/api/weather?lat=${place.lat}&amp;lon=${place.lon}` +
-      `&amp;units=${state.units}&amp;country_code=${place.country_code || &quot;&quot;}`;
+      `&amp;units=${state.units}&amp;country_code=${place.country_code || &quot;&quot;}` +
+      `&amp;admin1=${encodeURIComponent(place.admin1 || &quot;&quot;)}`;
     const res = await fetch(url);
     const data = await res.json();
     if (data.error) throw new Error(data.detail || data.error);
