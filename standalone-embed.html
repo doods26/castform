@@ -580,6 +580,9 @@ body.radar-fs-open { overflow: hidden; }
   background: #fff; transition: transform .2s; }
 .set-toggle.on { background: var(--accent); }
 .set-toggle.on span { transform: translateX(20px); }
+.set-select { padding: 8px 12px; border-radius: 11px; border: 1px solid var(--stroke);
+  background: var(--glass); color: var(--text); font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+.set-select option { color: #16233f; }
 .set-accents { display: flex; gap: 8px; }
 .set-swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent;
   cursor: pointer; padding: 0; }
@@ -861,9 +864,9 @@ const __NS__ = {};
       });
     } catch (e) { return []; }
   }
-  async function getReverse(lat, lon) {
+  async function getReverse(lat, lon, lang) {
     try {
-      const d = await j(`${REVERSE}?latitude=${lat}&amp;longitude=${lon}&amp;localityLanguage=en`);
+      const d = await j(`${REVERSE}?latitude=${lat}&amp;longitude=${lon}&amp;localityLanguage=${lang || &quot;en&quot;}`);
       return { name: d.city || d.locality || d.principalSubdivision, admin1: d.principalSubdivision,
         country: d.countryName, country_code: d.countryCode };
     } catch (e) { return { name: null }; }
@@ -924,9 +927,10 @@ const __NS__ = {};
       if (p === &quot;/api/geocode&quot;) {
         const name = (q.get(&quot;q&quot;) || &quot;&quot;).trim();
         if (!name) return { results: [] };
-        return await j(`${GEOCODE}?name=${encodeURIComponent(name)}&amp;count=8&amp;language=en&amp;format=json`);
+        const lang = (q.get(&quot;lang&quot;) || &quot;en&quot;).slice(0, 2).toLowerCase();
+        return await j(`${GEOCODE}?name=${encodeURIComponent(name)}&amp;count=8&amp;language=${lang}&amp;format=json`);
       }
-      if (p === &quot;/api/reverse&quot;) return await getReverse(q.get(&quot;lat&quot;), q.get(&quot;lon&quot;));
+      if (p === &quot;/api/reverse&quot;) return await getReverse(q.get(&quot;lat&quot;), q.get(&quot;lon&quot;), (q.get(&quot;lang&quot;) || &quot;en&quot;).slice(0, 2).toLowerCase());
       if (p === &quot;/api/radar&quot;) return await j(RAINVIEWER);
       if (p === &quot;/api/history&quot;) {
         const { tu, pu } = units(q.get(&quot;units&quot;));
@@ -1458,6 +1462,7 @@ const state = {
   units: localStorage.getItem(&quot;units&quot;) || &quot;imperial&quot;,
   place: JSON.parse(localStorage.getItem(&quot;place&quot;) || &quot;null&quot;),
   favorites: JSON.parse(localStorage.getItem(&quot;favorites&quot;) || &quot;[]&quot;),
+  lang: localStorage.getItem(&quot;lang&quot;) || &quot;auto&quot;,
   // Settings (see the settings panel)
   timeFormat: localStorage.getItem(&quot;timeFormat&quot;) || &quot;auto&quot;,     // auto | 12 | 24
   windUnit: localStorage.getItem(&quot;windUnit&quot;) || &quot;auto&quot;,         // auto | mph | kmh | ms | kn
@@ -1468,6 +1473,17 @@ const state = {
   accent: localStorage.getItem(&quot;accent&quot;) || &quot;&quot;,                  // &quot;&quot; = default
 };
 const ACCENTS = [&quot;#6fb7ff&quot;, &quot;#54d6c2&quot;, &quot;#a3e635&quot;, &quot;#ffd45e&quot;, &quot;#ff8a5f&quot;, &quot;#c08cff&quot;];
+// Language: localizes place names (geocoding) and date/time/number formatting.
+const LANGS = [[&quot;auto&quot;, &quot;Auto&quot;], [&quot;en&quot;, &quot;English&quot;], [&quot;es&quot;, &quot;Español&quot;], [&quot;fr&quot;, &quot;Français&quot;],
+  [&quot;de&quot;, &quot;Deutsch&quot;], [&quot;pt&quot;, &quot;Português&quot;], [&quot;it&quot;, &quot;Italiano&quot;], [&quot;nl&quot;, &quot;Nederlands&quot;],
+  [&quot;sv&quot;, &quot;Svenska&quot;], [&quot;pl&quot;, &quot;Polski&quot;], [&quot;ja&quot;, &quot;日本語&quot;], [&quot;zh&quot;, &quot;中文&quot;]];
+const effLangTag = () => (state.lang === &quot;auto&quot; ? (navigator.language || &quot;en&quot;) : state.lang);
+const effLang2 = () => effLangTag().slice(0, 2).toLowerCase();
+const LOCALE = () => effLangTag();
+function applyLang() {
+  document.documentElement.lang = effLang2();
+  document.documentElement.dir = [&quot;ar&quot;, &quot;he&quot;, &quot;fa&quot;, &quot;ur&quot;].includes(effLang2()) ? &quot;rtl&quot; : &quot;ltr&quot;;
+}
 let refreshTimer = null;
 let chart = null;
 let histChart = null;
@@ -1500,7 +1516,7 @@ function clk(d, withMin) {
   const o = { hour: &quot;numeric&quot; };
   if (withMin !== false) o.minute = &quot;2-digit&quot;;
   const h12 = hourPref(); if (h12 !== undefined) o.hour12 = h12;
-  return dt.toLocaleTimeString([], o);
+  return dt.toLocaleTimeString(LOCALE(), o);
 }
 // Re-render only the views affected by a client-side setting change (time /
 // wind / pressure units) using the data we already have — no refetch, and no
@@ -1530,6 +1546,7 @@ function boot() {
   setupSettings();
   applyReduceMotion();
   applyTheme();
+  applyLang();
   if (window.matchMedia) {
     const mq = window.matchMedia(&quot;(prefers-color-scheme: light)&quot;);
     (mq.addEventListener ? mq.addEventListener.bind(mq, &quot;change&quot;) : mq.addListener.bind(mq))(() => {
@@ -1646,7 +1663,7 @@ function setupSearch() {
         let results = [];
         if (/^\d[\d\s-]{2,}$/.test(q)) results = await zipSearch(q);   // looks like a postal code
         if (!results.length) {
-          const data = await (await fetch(`/api/geocode?q=${encodeURIComponent(q)}`)).json();
+          const data = await (await fetch(`/api/geocode?q=${encodeURIComponent(q)}&amp;lang=${effLang2()}`)).json();
           results = (data.results || []).map((p) => ({
             name: p.name, admin1: p.admin1, country: p.country,
             country_code: p.country_code, lat: p.latitude, lon: p.longitude,
@@ -1676,7 +1693,7 @@ function useMyLocation() {
       const { latitude: lat, longitude: lon } = pos.coords;
       let info = {};
       try {
-        const r = await fetch(`/api/reverse?lat=${lat}&amp;lon=${lon}`);
+        const r = await fetch(`/api/reverse?lat=${lat}&amp;lon=${lon}&amp;lang=${effLang2()}`);
         info = await r.json();
       } catch (e) { /* ignore */ }
       loadWeather({
@@ -2136,8 +2153,8 @@ function renderDaily(f) {
   for (let i = start; i < d.time.length; i++) {
     const ds = d.time[i];
     const date = new Date(ds + &quot;T12:00:00&quot;);
-    const name = i === start ? &quot;Today&quot; : date.toLocaleDateString([], { weekday: &quot;short&quot; });
-    const sub = date.toLocaleDateString([], { month: &quot;short&quot;, day: &quot;numeric&quot; });
+    const name = i === start ? &quot;Today&quot; : date.toLocaleDateString(LOCALE(), { weekday: &quot;short&quot; });
+    const sub = date.toLocaleDateString(LOCALE(), { month: &quot;short&quot;, day: &quot;numeric&quot; });
     const lo = d.temperature_2m_min[i], hi = d.temperature_2m_max[i];
     const left = ((lo - gMin) / span) * 100;
     const width = ((hi - lo) / span) * 100;
@@ -2513,7 +2530,7 @@ function renderHistory(h, todayHigh, todayLow) {
   const factsEl = $(&quot;historyFacts&quot;);
   if (factsEl) factsEl.innerHTML = facts.length ? `📅 ${facts.join(&quot; &quot;)}` : &quot;&quot;;
   const rec = h.recent;
-  const labels = rec.time.map((t) => new Date(t + &quot;T12:00:00&quot;).toLocaleDateString([], { month: &quot;short&quot;, day: &quot;numeric&quot; }));
+  const labels = rec.time.map((t) => new Date(t + &quot;T12:00:00&quot;).toLocaleDateString(LOCALE(), { month: &quot;short&quot;, day: &quot;numeric&quot; }));
   const ctx = $(&quot;historyChart&quot;).getContext(&quot;2d&quot;);
   if (histChart) histChart.destroy();
   const nHigh = rec.time.map(() => n.high);
@@ -2673,6 +2690,8 @@ function renderSettings() {
     <div class=&quot;set-row&quot;><label>Temperature</label>${seg(&quot;units&quot;, state.units)}</div>
     <div class=&quot;set-row&quot;><label>Theme</label>${seg(&quot;themeMode&quot;, state.themeMode)}</div>
     <div class=&quot;set-row&quot;><label>Accent</label><div class=&quot;set-accents&quot;>${ACCENTS.map((c) => `<button class=&quot;set-swatch${state.accent === c ? &quot; active&quot; : &quot;&quot;}&quot; data-accent=&quot;${c}&quot; style=&quot;background:${c}&quot; aria-label=&quot;Accent ${c}&quot;></button>`).join(&quot;&quot;)}</div></div>
+    <div class=&quot;set-row&quot;><label>Language<span class=&quot;set-hint&quot;>Place names &amp;amp; dates</span></label>
+      <select class=&quot;set-select&quot; id=&quot;langSelect&quot;>${LANGS.map(([v, l]) => `<option value=&quot;${v}&quot;${state.lang === v ? &quot; selected&quot; : &quot;&quot;}>${l}</option>`).join(&quot;&quot;)}</select></div>
     <div class=&quot;set-row&quot;><label>Time format</label>${seg(&quot;timeFormat&quot;, state.timeFormat)}</div>
     <div class=&quot;set-row&quot;><label>Wind speed</label>${seg(&quot;windUnit&quot;, state.windUnit)}</div>
     <div class=&quot;set-row&quot;><label>Pressure</label>${seg(&quot;pressureUnit&quot;, state.pressureUnit)}</div>
@@ -2687,6 +2706,8 @@ function renderSettings() {
     sgEl.querySelectorAll(&quot;button&quot;).forEach((b) => { b.onclick = () => setSetting(sgEl.dataset.seg, b.dataset.v); });
   });
   body.querySelectorAll(&quot;[data-accent]&quot;).forEach((b) => { b.onclick = () => setSetting(&quot;accent&quot;, b.dataset.accent); });
+  const langSel = body.querySelector(&quot;#langSelect&quot;);
+  if (langSel) langSel.onchange = () => setSetting(&quot;lang&quot;, langSel.value);
   const tog = body.querySelector('[data-toggle=&quot;reduceMotion&quot;]');
   if (tog) tog.onclick = () => {
     state.reduceMotion = !state.reduceMotion;
@@ -2709,13 +2730,14 @@ function setSetting(key, value) {
   state[key] = value;
   localStorage.setItem(key, value);
   if (key === &quot;themeMode&quot; || key === &quot;accent&quot;) applyTheme(); // pure CSS, no re-render
+  else if (key === &quot;lang&quot;) { applyLang(); rerender(); }      // re-locale dates/times
   else rerender();                                           // client-side re-render, no refetch
   renderSettings();
 }
 // --- Click-to-pick on the radar map ---------------------------------------
 async function onMapPick(lat, lon) {
   let info = {};
-  try { info = await (await fetch(`/api/reverse?lat=${lat}&amp;lon=${lon}`)).json(); } catch (e) {}
+  try { info = await (await fetch(`/api/reverse?lat=${lat}&amp;lon=${lon}&amp;lang=${effLang2()}`)).json(); } catch (e) {}
   loadWeather({
     name: info.name || &quot;Pinned point&quot;, admin1: info.admin1, country: info.country,
     country_code: info.country_code, lat, lon,
@@ -2734,7 +2756,7 @@ function setupCompare() {
     if (q.length < 2) { box.innerHTML = &quot;&quot;; return; }
     timer = setTimeout(async () => {
       try {
-        const data = await (await fetch(`/api/geocode?q=${encodeURIComponent(q)}`)).json();
+        const data = await (await fetch(`/api/geocode?q=${encodeURIComponent(q)}&amp;lang=${effLang2()}`)).json();
         box.innerHTML = &quot;&quot;;
         (data.results || []).forEach((p) => {
           const btn = document.createElement(&quot;button&quot;);

@@ -622,6 +622,9 @@ body.radar-fs-open { overflow: hidden; }
   background: #fff; transition: transform .2s; }
 .set-toggle.on { background: var(--accent); }
 .set-toggle.on span { transform: translateX(20px); }
+.set-select { padding: 8px 12px; border-radius: 11px; border: 1px solid var(--stroke);
+  background: var(--glass); color: var(--text); font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+.set-select option { color: #16233f; }
 .set-accents { display: flex; gap: 8px; }
 .set-swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent;
   cursor: pointer; padding: 0; }

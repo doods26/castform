@@ -83,9 +83,9 @@
     } catch (e) { return []; }
   }
 
-  async function getReverse(lat, lon) {
+  async function getReverse(lat, lon, lang) {
     try {
-      const d = await j(`${REVERSE}?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
+      const d = await j(`${REVERSE}?latitude=${lat}&longitude=${lon}&localityLanguage=${lang || "en"}`);
       return { name: d.city || d.locality || d.principalSubdivision, admin1: d.principalSubdivision,
         country: d.countryName, country_code: d.countryCode };
     } catch (e) { return { name: null }; }
@@ -150,9 +150,10 @@
       if (p === "/api/geocode") {
         const name = (q.get("q") || "").trim();
         if (!name) return { results: [] };
-        return await j(`${GEOCODE}?name=${encodeURIComponent(name)}&count=8&language=en&format=json`);
+        const lang = (q.get("lang") || "en").slice(0, 2).toLowerCase();
+        return await j(`${GEOCODE}?name=${encodeURIComponent(name)}&count=8&language=${lang}&format=json`);
       }
-      if (p === "/api/reverse") return await getReverse(q.get("lat"), q.get("lon"));
+      if (p === "/api/reverse") return await getReverse(q.get("lat"), q.get("lon"), (q.get("lang") || "en").slice(0, 2).toLowerCase());
       if (p === "/api/radar") return await j(RAINVIEWER);
       if (p === "/api/history") {
         const { tu, pu } = units(q.get("units"));

@@ -8,6 +8,7 @@ const state = {
   units: localStorage.getItem("units") || "imperial",
   place: JSON.parse(localStorage.getItem("place") || "null"),
   favorites: JSON.parse(localStorage.getItem("favorites") || "[]"),
+  lang: localStorage.getItem("lang") || "auto",
   // Settings (see the settings panel)
   timeFormat: localStorage.getItem("timeFormat") || "auto",     // auto | 12 | 24
   windUnit: localStorage.getItem("windUnit") || "auto",         // auto | mph | kmh | ms | kn
@@ -18,6 +19,17 @@ const state = {
   accent: localStorage.getItem("accent") || "",                  // "" = default
 };
 const ACCENTS = ["#6fb7ff", "#54d6c2", "#a3e635", "#ffd45e", "#ff8a5f", "#c08cff"];
+// Language: localizes place names (geocoding) and date/time/number formatting.
+const LANGS = [["auto", "Auto"], ["en", "English"], ["es", "Español"], ["fr", "Français"],
+  ["de", "Deutsch"], ["pt", "Português"], ["it", "Italiano"], ["nl", "Nederlands"],
+  ["sv", "Svenska"], ["pl", "Polski"], ["ja", "日本語"], ["zh", "中文"]];
+const effLangTag = () => (state.lang === "auto" ? (navigator.language || "en") : state.lang);
+const effLang2 = () => effLangTag().slice(0, 2).toLowerCase();
+const LOCALE = () => effLangTag();
+function applyLang() {
+  document.documentElement.lang = effLang2();
+  document.documentElement.dir = ["ar", "he", "fa", "ur"].includes(effLang2()) ? "rtl" : "ltr";
+}
 let refreshTimer = null;
 let chart = null;
 let histChart = null;
@@ -54,7 +66,7 @@ function clk(d, withMin) {
   const o = { hour: "numeric" };
   if (withMin !== false) o.minute = "2-digit";
   const h12 = hourPref(); if (h12 !== undefined) o.hour12 = h12;
-  return dt.toLocaleTimeString([], o);
+  return dt.toLocaleTimeString(LOCALE(), o);
 }
 
 // Re-render only the views affected by a client-side setting change (time /
@@ -86,6 +98,7 @@ function boot() {
   setupSettings();
   applyReduceMotion();
   applyTheme();
+  applyLang();
   if (window.matchMedia) {
     const mq = window.matchMedia("(prefers-color-scheme: light)");
     (mq.addEventListener ? mq.addEventListener.bind(mq, "change") : mq.addListener.bind(mq))(() => {
@@ -214,7 +227,7 @@ function setupSearch() {
         let results = [];
         if (/^\d[\d\s-]{2,}$/.test(q)) results = await zipSearch(q);   // looks like a postal code
         if (!results.length) {
-          const data = await (await fetch(`/api/geocode?q=${encodeURIComponent(q)}`)).json();
+          const data = await (await fetch(`/api/geocode?q=${encodeURIComponent(q)}&lang=${effLang2()}`)).json();
           results = (data.results || []).map((p) => ({
             name: p.name, admin1: p.admin1, country: p.country,
             country_code: p.country_code, lat: p.latitude, lon: p.longitude,
@@ -245,7 +258,7 @@ function useMyLocation() {
       const { latitude: lat, longitude: lon } = pos.coords;
       let info = {};
       try {
-        const r = await fetch(`/api/reverse?lat=${lat}&lon=${lon}`);
+        const r = await fetch(`/api/reverse?lat=${lat}&lon=${lon}&lang=${effLang2()}`);
         info = await r.json();
       } catch (e) { /* ignore */ }
       loadWeather({
@@ -748,8 +761,8 @@ function renderDaily(f) {
   for (let i = start; i < d.time.length; i++) {
     const ds = d.time[i];
     const date = new Date(ds + "T12:00:00");
-    const name = i === start ? "Today" : date.toLocaleDateString([], { weekday: "short" });
-    const sub = date.toLocaleDateString([], { month: "short", day: "numeric" });
+    const name = i === start ? "Today" : date.toLocaleDateString(LOCALE(), { weekday: "short" });
+    const sub = date.toLocaleDateString(LOCALE(), { month: "short", day: "numeric" });
     const lo = d.temperature_2m_min[i], hi = d.temperature_2m_max[i];
     const left = ((lo - gMin) / span) * 100;
     const width = ((hi - lo) / span) * 100;
@@ -1149,7 +1162,7 @@ function renderHistory(h, todayHigh, todayLow) {
   if (factsEl) factsEl.innerHTML = facts.length ? `📅 ${facts.join(" ")}` : "";
 
   const rec = h.recent;
-  const labels = rec.time.map((t) => new Date(t + "T12:00:00").toLocaleDateString([], { month: "short", day: "numeric" }));
+  const labels = rec.time.map((t) => new Date(t + "T12:00:00").toLocaleDateString(LOCALE(), { month: "short", day: "numeric" }));
   const ctx = $("historyChart").getContext("2d");
   if (histChart) histChart.destroy();
   const nHigh = rec.time.map(() => n.high);
@@ -1320,6 +1333,8 @@ function renderSettings() {
     <div class="set-row"><label>Temperature</label>${seg("units", state.units)}</div>
     <div class="set-row"><label>Theme</label>${seg("themeMode", state.themeMode)}</div>
     <div class="set-row"><label>Accent</label><div class="set-accents">${ACCENTS.map((c) => `<button class="set-swatch${state.accent === c ? " active" : ""}" data-accent="${c}" style="background:${c}" aria-label="Accent ${c}"></button>`).join("")}</div></div>
+    <div class="set-row"><label>Language<span class="set-hint">Place names &amp; dates</span></label>
+      <select class="set-select" id="langSelect">${LANGS.map(([v, l]) => `<option value="${v}"${state.lang === v ? " selected" : ""}>${l}</option>`).join("")}</select></div>
     <div class="set-row"><label>Time format</label>${seg("timeFormat", state.timeFormat)}</div>
     <div class="set-row"><label>Wind speed</label>${seg("windUnit", state.windUnit)}</div>
     <div class="set-row"><label>Pressure</label>${seg("pressureUnit", state.pressureUnit)}</div>
@@ -1335,6 +1350,8 @@ function renderSettings() {
     sgEl.querySelectorAll("button").forEach((b) => { b.onclick = () => setSetting(sgEl.dataset.seg, b.dataset.v); });
   });
   body.querySelectorAll("[data-accent]").forEach((b) => { b.onclick = () => setSetting("accent", b.dataset.accent); });
+  const langSel = body.querySelector("#langSelect");
+  if (langSel) langSel.onchange = () => setSetting("lang", langSel.value);
   const tog = body.querySelector('[data-toggle="reduceMotion"]');
   if (tog) tog.onclick = () => {
     state.reduceMotion = !state.reduceMotion;
@@ -1358,6 +1375,7 @@ function setSetting(key, value) {
   state[key] = value;
   localStorage.setItem(key, value);
   if (key === "themeMode" || key === "accent") applyTheme(); // pure CSS, no re-render
+  else if (key === "lang") { applyLang(); rerender(); }      // re-locale dates/times
   else rerender();                                           // client-side re-render, no refetch
   renderSettings();
 }
@@ -1365,7 +1383,7 @@ function setSetting(key, value) {
 // --- Click-to-pick on the radar map ---------------------------------------
 async function onMapPick(lat, lon) {
   let info = {};
-  try { info = await (await fetch(`/api/reverse?lat=${lat}&lon=${lon}`)).json(); } catch (e) {}
+  try { info = await (await fetch(`/api/reverse?lat=${lat}&lon=${lon}&lang=${effLang2()}`)).json(); } catch (e) {}
   loadWeather({
     name: info.name || "Pinned point", admin1: info.admin1, country: info.country,
     country_code: info.country_code, lat, lon,
@@ -1385,7 +1403,7 @@ function setupCompare() {
     if (q.length < 2) { box.innerHTML = ""; return; }
     timer = setTimeout(async () => {
       try {
-        const data = await (await fetch(`/api/geocode?q=${encodeURIComponent(q)}`)).json();
+        const data = await (await fetch(`/api/geocode?q=${encodeURIComponent(q)}&lang=${effLang2()}`)).json();
         box.innerHTML = "";
         (data.results || []).forEach((p) => {
           const btn = document.createElement("button");

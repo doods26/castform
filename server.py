@@ -385,9 +385,9 @@ def get_alerts(lat, lon):
     return out
 
 
-def reverse_geocode(lat, lon):
+def reverse_geocode(lat, lon, lang="en"):
     try:
-        params = {"latitude": lat, "longitude": lon, "localityLanguage": "en"}
+        params = {"latitude": lat, "longitude": lon, "localityLanguage": lang}
         d = fetch_json(f"{REVERSE_BASE}?{urllib.parse.urlencode(params)}", ttl=86400)
         return {
             "name": d.get("city") or d.get("locality") or d.get("principalSubdivision"),
@@ -508,12 +508,13 @@ class Handler(BaseHTTPRequestHandler):
                 name = arg("q", "").strip()
                 if not name:
                     return self._send_json({"results": []})
-                params = {"name": name, "count": 8, "language": "en", "format": "json"}
+                lang = (arg("lang", "en") or "en")[:2].lower()
+                params = {"name": name, "count": 8, "language": lang, "format": "json"}
                 data = fetch_json(f"{GEOCODE_BASE}?{urllib.parse.urlencode(params)}", ttl=86400)
                 return self._send_json(data)
 
             if route == "/api/reverse":
-                return self._send_json(reverse_geocode(arg("lat"), arg("lon")))
+                return self._send_json(reverse_geocode(arg("lat"), arg("lon"), (arg("lang", "en") or "en")[:2].lower()))
 
             if route == "/api/radar":
                 # RainViewer: past (~2h) + nowcast (~30min) radar frames for the
