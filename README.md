@@ -144,6 +144,26 @@ geocoding 24 h) so it's gentle on the upstream APIs and snappy to use.
 
 ---
 
+## Tests
+
+A zero-dependency regression suite (Python standard-library `unittest`, fully
+offline — no network calls) guards the logic that's easy to break silently:
+the LAN security gate, the TTL cache, `fetch_json` retry/back-off behaviour,
+MeteoAlarm point-in-polygon matching, and the frontend build pipeline (no ES
+`import` leaks into the inlined standalone bundle, cache-bust versions stay in
+sync, the manifest/service-worker only reference files that exist).
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+Tests run automatically in CI on every push and pull request
+(`.github/workflows/tests.yml`), and a passing run **gates the Pages deploy**
+(`pages.yml` runs the suite before building). **Every code change should add or
+update a test and run the suite green before committing.**
+
+---
+
 ## Roadmap → Raspberry Pi
 
 The web app already runs unchanged on a full **Raspberry Pi (3/4/5)** — Python and

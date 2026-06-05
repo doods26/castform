@@ -1,0 +1,26 @@
+name: Tests
+
+# Regression suite. Runs on every push and every pull request so a broken
+# change is caught before it can merge or deploy. Zero dependencies — the
+# tests use only the Python standard library and never touch the network.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run regression tests
+        run: python -m unittest discover -s tests -v
