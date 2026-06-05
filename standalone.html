@@ -32,7 +32,20 @@
   --lime: #a3e635;
   --radius: 20px;
   --shadow: 0 20px 55px rgba(0, 0, 0, 0.40);
+  /* Semantic surfaces (flipped in light mode) */
+  --panel-2: rgba(255, 255, 255, 0.05);
+  --panel-grad-a: rgba(255, 255, 255, 0.06);
+  --panel-grad-b: rgba(255, 255, 255, 0.02);
+  --gauge-track: rgba(255, 255, 255, 0.09);
+  --gauge-tick: rgba(255, 255, 255, 0.18);
+  --accent: #6fb7ff;
 }
+/* Light-mode component overrides (specific selectors — order-independent).
+   The core light palette lives after the data-theme rules below so it wins. */
+body.light[data-night="1"] { filter: none; }
+body.light .results { background: rgba(255, 255, 255, 0.97); }
+body.light .settings-panel { background: linear-gradient(180deg, #ffffff, #eef3fb); }
+body.light .update-toast { background: rgba(255, 255, 255, 0.96); color: var(--text); }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { height: 100%; }
 body {
@@ -54,6 +67,22 @@ body[data-theme="rain"]    { --bg-a:#33486b; --bg-b:#121d33; }
 body[data-theme="snow"]    { --bg-a:#5e7290; --bg-b:#28344d; }
 body[data-theme="storm"]   { --bg-a:#2a2f47; --bg-b:#0c0f1d; }
 body[data-night="1"]       { filter: saturate(0.92) brightness(0.92); }
+/* Light theme palette — placed after data-theme so it wins (equal specificity) */
+body.light {
+  --bg-a: #d7e3f6; --bg-b: #eef3fb;
+  --glass: rgba(20, 45, 95, 0.05);
+  --glass-strong: rgba(20, 45, 95, 0.10);
+  --stroke: rgba(20, 40, 85, 0.14);
+  --text: #16233f;
+  --muted: rgba(22, 35, 63, 0.66);
+  --faint: rgba(22, 35, 63, 0.44);
+  --panel-2: rgba(20, 45, 95, 0.055);
+  --panel-grad-a: rgba(255, 255, 255, 0.85);
+  --panel-grad-b: rgba(255, 255, 255, 0.55);
+  --gauge-track: rgba(20, 40, 85, 0.12);
+  --gauge-tick: rgba(20, 40, 85, 0.22);
+  --shadow: 0 16px 40px rgba(40, 65, 110, 0.16);
+}
 .sky-layer {
   position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
   background:
@@ -127,7 +156,7 @@ header.topbar {
 /* Cards ------------------------------------------------------------------- */
 .card {
   position: relative;
-  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+  background: linear-gradient(180deg, var(--panel-grad-a), var(--panel-grad-b));
   border: 1px solid var(--stroke);
   border-radius: var(--radius); backdrop-filter: blur(16px);
   box-shadow: var(--shadow); padding: 18px;
@@ -184,7 +213,7 @@ header.topbar {
 .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 @media (max-width: 520px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
 .tile {
-  background: rgba(255,255,255,0.05); border: 1px solid var(--stroke);
+  background: var(--panel-2); border: 1px solid var(--stroke);
   border-radius: 16px; padding: 13px 14px; display: flex; flex-direction: column; gap: 3px;
 }
 .tile .k { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.8px; color: var(--faint); }
@@ -204,7 +233,7 @@ header.topbar {
 /* Daily ------------------------------------------------------------------- */
 .days { display: flex; flex-direction: column; gap: 2px; }
 .day-item { border-radius: 12px; transition: background .15s; }
-.day-item.open { background: rgba(255,255,255,0.05); }
+.day-item.open { background: var(--panel-2); }
 .day { display: grid; grid-template-columns: 108px 40px 1fr 116px; align-items: center; gap: 12px; padding: 7px 6px; border-radius: 12px; cursor: pointer; }
 .day:hover { background: var(--glass); }
 .day:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -252,7 +281,7 @@ body.radar-fs-open { overflow: hidden; }
 .aqi-cat { font-size: 1.25rem; font-weight: 700; }
 .aqi-desc { color: var(--muted); font-size: 0.88rem; margin-top: 4px; max-width: 320px; }
 .pollutants { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; margin-top: 18px; }
-.poll { background: rgba(255,255,255,0.05); border: 1px solid var(--stroke); border-radius: 12px; padding: 10px; }
+.poll { background: var(--panel-2); border: 1px solid var(--stroke); border-radius: 12px; padding: 10px; }
 .poll .k { font-size: 0.7rem; color: var(--faint); text-transform: uppercase; }
 .poll .v { font-weight: 700; font-size: 1.05rem; }
 .poll .u { font-size: 0.72rem; color: var(--muted); }
@@ -312,7 +341,7 @@ body.radar-fs-open { overflow: hidden; }
 .cond-card .gauge-grid { flex: 1; align-content: center; }
 .gauge-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 4px 8px; }
 .gauge-cell { display: flex; flex-direction: column; align-items: center; padding: 6px 4px; border-radius: 16px; transition: background .2s; }
-.gauge-cell:hover { background: rgba(255,255,255,0.04); }
+.gauge-cell:hover { background: var(--panel-2); }
 .gauge-cap { font-size: 12px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.6px; margin-top: -6px; }
 /* Hero: big temperature gauge, horizontal layout */
 .current { display: flex; flex-direction: column; }
@@ -363,7 +392,7 @@ body.radar-fs-open { overflow: hidden; }
 .sun-extra .k { font-size: 0.74rem; color: var(--faint); }
 .sun-extra .v2 { font-size: 1rem; font-weight: 700; margin-top: 2px; }
 .history-facts { font-size: 0.9rem; color: var(--muted); line-height: 1.6; margin-bottom: 14px;
-  padding: 12px 14px; background: rgba(255,255,255,0.04); border-radius: 12px; border: 1px solid var(--stroke); }
+  padding: 12px 14px; background: var(--panel-2); border-radius: 12px; border: 1px solid var(--stroke); }
 .history-facts:empty { display: none; }
 .history-facts b { color: var(--text); }
 /* Compare */
@@ -371,7 +400,7 @@ body.radar-fs-open { overflow: hidden; }
 .compare-panel { display: flex; align-items: stretch; gap: 14px; margin-top: 16px; }
 .compare-panel.hidden { display: none; }
 .cmp-loading { color: var(--muted); padding: 14px; }
-.cmp-col { position: relative; flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--stroke);
+.cmp-col { position: relative; flex: 1; background: var(--panel-2); border: 1px solid var(--stroke);
   border-radius: 16px; padding: 16px; text-align: center; }
 .cmp-vs { align-self: center; color: var(--faint); font-weight: 700; }
 .cmp-name { font-weight: 700; font-size: 1.05rem; }
@@ -428,7 +457,7 @@ body.radar-fs-open { overflow: hidden; }
 /* Historical reference ---------------------------------------------------- */
 .history-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
   gap: 12px; margin-bottom: 16px; align-items: start; }
-.hstat { background: rgba(255,255,255,0.05); border: 1px solid var(--stroke);
+.hstat { background: var(--panel-2); border: 1px solid var(--stroke);
   border-radius: 14px; padding: 12px 14px; }
 .hstat .k { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.8px; color: var(--faint); }
 .hstat .v { font-size: 1.5rem; font-weight: 700; line-height: 1.1; margin-top: 2px; }
@@ -504,7 +533,7 @@ body.radar-fs-open { overflow: hidden; }
   padding: 3px 10px; border-radius: 999px; }
 /* Inline 7-day precip-probability bar */
 .day .dprecip { grid-column: 1 / -1; display: flex; gap: 1px; height: 5px; margin-top: 4px;
-  border-radius: 3px; overflow: hidden; background: rgba(255,255,255,0.05); }
+  border-radius: 3px; overflow: hidden; background: var(--panel-2); }
 .day .dprecip i { flex: 1; background: #5fa8ff; opacity: var(--a, 0); }
 .dd-story { font-weight: 600; color: var(--text); margin: 0 0 8px; font-size: 0.9rem; }
 /* Live favorite chips */
@@ -516,7 +545,7 @@ body.radar-fs-open { overflow: hidden; }
 .fav-chip .fav-name { font-weight: 500; }
 /* Lifestyle / activity indices */
 .life-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-.life { background: rgba(255,255,255,0.05); border: 1px solid var(--stroke); border-radius: 14px; padding: 12px 13px; }
+.life { background: var(--panel-2); border: 1px solid var(--stroke); border-radius: 14px; padding: 12px 13px; }
 .life-top { display: flex; align-items: center; justify-content: space-between; }
 .life-emoji { font-size: 1.4rem; }
 .life-score { font-size: 1.5rem; font-weight: 800; line-height: 1; }
@@ -551,6 +580,10 @@ body.radar-fs-open { overflow: hidden; }
   background: #fff; transition: transform .2s; }
 .set-toggle.on { background: var(--accent); }
 .set-toggle.on span { transform: translateX(20px); }
+.set-accents { display: flex; gap: 8px; }
+.set-swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent;
+  cursor: pointer; padding: 0; }
+.set-swatch.active { border-color: var(--text); box-shadow: 0 0 0 2px var(--bg-b); }
 .set-startup { display: flex; gap: 8px; }
 .btn.sm { padding: 7px 11px; font-size: 0.82rem; }
 .settings-foot { text-align: center; color: var(--faint); font-size: 0.72rem; margin-top: 14px; }
@@ -1058,7 +1091,7 @@ function gauge(opts) {
         <feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
       </filter>
     </defs>
-    <path d="${track}" fill="none" stroke="rgba(255,255,255,0.09)" stroke-width="11" stroke-linecap="round"/>
+    <path d="${track}" fill="none" stroke="var(--gauge-track)" stroke-width="11" stroke-linecap="round"/>
     <path d="${track}" fill="none" stroke="url(#${id})" stroke-width="11" stroke-linecap="round"
       pathLength="100" stroke-dasharray="100" filter="url(#${id}f)"
       class="gauge-arc" style="--target:${off}"/>
@@ -1077,12 +1110,12 @@ function compassGauge(deg, speed, unit, gust) {
   }).join("");
   const minor = Array.from({ length: 12 }, (_, i) => {
     const a = i * 30; const o = polar(cx, cy, r, a); const inn = polar(cx, cy, r - 6, a);
-    return `<line x1="${o.x.toFixed(1)}" y1="${o.y.toFixed(1)}" x2="${inn.x.toFixed(1)}" y2="${inn.y.toFixed(1)}" stroke="rgba(255,255,255,0.18)" stroke-width="1.5"/>`;
+    return `<line x1="${o.x.toFixed(1)}" y1="${o.y.toFixed(1)}" x2="${inn.x.toFixed(1)}" y2="${inn.y.toFixed(1)}" stroke="var(--gauge-tick)" stroke-width="1.5"/>`;
   }).join("");
   const has = deg != null;
   return `
   <svg class="gauge" viewBox="0 0 140 140" role="img" aria-label="Wind ${speed}${unit}">
-    <circle cx="70" cy="70" r="${r}" fill="none" stroke="rgba(255,255,255,0.09)" stroke-width="2"/>
+    <circle cx="70" cy="70" r="${r}" fill="none" stroke="var(--gauge-track)" stroke-width="2"/>
     ${minor}${ticks}
     ${has ? `<g class="compass-needle" style="transform-origin:70px 70px;transform:rotate(${deg}deg)">
       <path d="M70 24 L76 72 L70 66 L64 72 Z" fill="#ff6b6b"/>
@@ -1431,7 +1464,10 @@ const state = {
   pressureUnit: localStorage.getItem("pressureUnit") || "auto", // auto | hPa | inHg | mmHg
   reduceMotion: localStorage.getItem("reduceMotion") === "1",
   defaultPlace: JSON.parse(localStorage.getItem("defaultPlace") || "null"),
+  themeMode: localStorage.getItem("themeMode") || "auto",        // auto | dark | light
+  accent: localStorage.getItem("accent") || "",                  // "" = default
 };
+const ACCENTS = ["#6fb7ff", "#54d6c2", "#a3e635", "#ffd45e", "#ff8a5f", "#c08cff"];
 let refreshTimer = null;
 let chart = null;
 let histChart = null;
@@ -1493,6 +1529,13 @@ function boot() {
   setupNotifications();
   setupSettings();
   applyReduceMotion();
+  applyTheme();
+  if (window.matchMedia) {
+    const mq = window.matchMedia("(prefers-color-scheme: light)");
+    (mq.addEventListener ? mq.addEventListener.bind(mq, "change") : mq.addListener.bind(mq))(() => {
+      if (state.themeMode === "auto") applyTheme();
+    });
+  }
   registerSW();
   wireFullscreen($("fullscreenBtn"));
   buildStars();
@@ -1504,6 +1547,15 @@ function boot() {
 }
 function applyReduceMotion() {
   document.body.classList.toggle("reduce-motion", !!state.reduceMotion);
+}
+// Light/dark theme + accent color.
+function applyTheme() {
+  const m = state.themeMode;
+  const light = m === "light" ||
+    (m === "auto" && window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches);
+  document.body.classList.toggle("light", light);
+  if (state.accent) document.documentElement.style.setProperty("--accent", state.accent);
+  else document.documentElement.style.removeProperty("--accent");
 }
 // Register the service worker (PWA offline + installability). Same-origin only;
 // silently ignored where unsupported or blocked (e.g. file://).
@@ -2594,6 +2646,7 @@ function renderFavorites() {
 // --- Settings panel -------------------------------------------------------
 const SEGMENTS = {
   units: [["imperial", "°F"], ["metric", "°C"]],
+  themeMode: [["auto", "Auto"], ["dark", "Dark"], ["light", "Light"]],
   timeFormat: [["auto", "Auto"], ["12", "12-hour"], ["24", "24-hour"]],
   windUnit: [["auto", "Auto"], ["mph", "mph"], ["kmh", "km/h"], ["ms", "m/s"], ["kn", "kn"]],
   pressureUnit: [["auto", "Auto"], ["hPa", "hPa"], ["inHg", "inHg"], ["mmHg", "mmHg"]],
@@ -2618,6 +2671,8 @@ function renderSettings() {
   const startup = state.defaultPlace ? state.defaultPlace.name : "Last viewed";
   body.innerHTML = `
     <div class="set-row"><label>Temperature</label>${seg("units", state.units)}</div>
+    <div class="set-row"><label>Theme</label>${seg("themeMode", state.themeMode)}</div>
+    <div class="set-row"><label>Accent</label><div class="set-accents">${ACCENTS.map((c) => `<button class="set-swatch${state.accent === c ? " active" : ""}" data-accent="${c}" style="background:${c}" aria-label="Accent ${c}"></button>`).join("")}</div></div>
     <div class="set-row"><label>Time format</label>${seg("timeFormat", state.timeFormat)}</div>
     <div class="set-row"><label>Wind speed</label>${seg("windUnit", state.windUnit)}</div>
     <div class="set-row"><label>Pressure</label>${seg("pressureUnit", state.pressureUnit)}</div>
@@ -2631,6 +2686,7 @@ function renderSettings() {
   body.querySelectorAll(".set-seg").forEach((sgEl) => {
     sgEl.querySelectorAll("button").forEach((b) => { b.onclick = () => setSetting(sgEl.dataset.seg, b.dataset.v); });
   });
+  body.querySelectorAll("[data-accent]").forEach((b) => { b.onclick = () => setSetting("accent", b.dataset.accent); });
   const tog = body.querySelector('[data-toggle="reduceMotion"]');
   if (tog) tog.onclick = () => {
     state.reduceMotion = !state.reduceMotion;
@@ -2652,7 +2708,8 @@ function setSetting(key, value) {
   if (key === "units") { setUnits(value); renderSettings(); return; } // needs a refetch
   state[key] = value;
   localStorage.setItem(key, value);
-  rerender();        // client-side only — no refetch
+  if (key === "themeMode" || key === "accent") applyTheme(); // pure CSS, no re-render
+  else rerender();                                           // client-side re-render, no refetch
   renderSettings();
 }
 // --- Click-to-pick on the radar map ---------------------------------------

@@ -45,7 +45,7 @@ export function gauge(opts) {
         <feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
       </filter>
     </defs>
-    <path d="${track}" fill="none" stroke="rgba(255,255,255,0.09)" stroke-width="11" stroke-linecap="round"/>
+    <path d="${track}" fill="none" stroke="var(--gauge-track)" stroke-width="11" stroke-linecap="round"/>
     <path d="${track}" fill="none" stroke="url(#${id})" stroke-width="11" stroke-linecap="round"
       pathLength="100" stroke-dasharray="100" filter="url(#${id}f)"
       class="gauge-arc" style="--target:${off}"/>
@@ -65,12 +65,12 @@ export function compassGauge(deg, speed, unit, gust) {
   }).join("");
   const minor = Array.from({ length: 12 }, (_, i) => {
     const a = i * 30; const o = polar(cx, cy, r, a); const inn = polar(cx, cy, r - 6, a);
-    return `<line x1="${o.x.toFixed(1)}" y1="${o.y.toFixed(1)}" x2="${inn.x.toFixed(1)}" y2="${inn.y.toFixed(1)}" stroke="rgba(255,255,255,0.18)" stroke-width="1.5"/>`;
+    return `<line x1="${o.x.toFixed(1)}" y1="${o.y.toFixed(1)}" x2="${inn.x.toFixed(1)}" y2="${inn.y.toFixed(1)}" stroke="var(--gauge-tick)" stroke-width="1.5"/>`;
   }).join("");
   const has = deg != null;
   return `
   <svg class="gauge" viewBox="0 0 140 140" role="img" aria-label="Wind ${speed}${unit}">
-    <circle cx="70" cy="70" r="${r}" fill="none" stroke="rgba(255,255,255,0.09)" stroke-width="2"/>
+    <circle cx="70" cy="70" r="${r}" fill="none" stroke="var(--gauge-track)" stroke-width="2"/>
     ${minor}${ticks}
     ${has ? `<g class="compass-needle" style="transform-origin:70px 70px;transform:rotate(${deg}deg)">
       <path d="M70 24 L76 72 L70 66 L64 72 Z" fill="#ff6b6b"/>

@@ -14,7 +14,10 @@ const state = {
   pressureUnit: localStorage.getItem("pressureUnit") || "auto", // auto | hPa | inHg | mmHg
   reduceMotion: localStorage.getItem("reduceMotion") === "1",
   defaultPlace: JSON.parse(localStorage.getItem("defaultPlace") || "null"),
+  themeMode: localStorage.getItem("themeMode") || "auto",        // auto | dark | light
+  accent: localStorage.getItem("accent") || "",                  // "" = default
 };
+const ACCENTS = ["#6fb7ff", "#54d6c2", "#a3e635", "#ffd45e", "#ff8a5f", "#c08cff"];
 let refreshTimer = null;
 let chart = null;
 let histChart = null;
@@ -82,6 +85,13 @@ function boot() {
   setupNotifications();
   setupSettings();
   applyReduceMotion();
+  applyTheme();
+  if (window.matchMedia) {
+    const mq = window.matchMedia("(prefers-color-scheme: light)");
+    (mq.addEventListener ? mq.addEventListener.bind(mq, "change") : mq.addListener.bind(mq))(() => {
+      if (state.themeMode === "auto") applyTheme();
+    });
+  }
   registerSW();
   wireFullscreen($("fullscreenBtn"));
   buildStars();
@@ -95,6 +105,16 @@ function boot() {
 
 function applyReduceMotion() {
   document.body.classList.toggle("reduce-motion", !!state.reduceMotion);
+}
+
+// Light/dark theme + accent color.
+function applyTheme() {
+  const m = state.themeMode;
+  const light = m === "light" ||
+    (m === "auto" && window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches);
+  document.body.classList.toggle("light", light);
+  if (state.accent) document.documentElement.style.setProperty("--accent", state.accent);
+  else document.documentElement.style.removeProperty("--accent");
 }
 
 // Register the service worker (PWA offline + installability). Same-origin only;
@@ -1270,6 +1290,7 @@ function renderFavorites() {
 // --- Settings panel -------------------------------------------------------
 const SEGMENTS = {
   units: [["imperial", "°F"], ["metric", "°C"]],
+  themeMode: [["auto", "Auto"], ["dark", "Dark"], ["light", "Light"]],
   timeFormat: [["auto", "Auto"], ["12", "12-hour"], ["24", "24-hour"]],
   windUnit: [["auto", "Auto"], ["mph", "mph"], ["kmh", "km/h"], ["ms", "m/s"], ["kn", "kn"]],
   pressureUnit: [["auto", "Auto"], ["hPa", "hPa"], ["inHg", "inHg"], ["mmHg", "mmHg"]],
@@ -1297,6 +1318,8 @@ function renderSettings() {
   const startup = state.defaultPlace ? state.defaultPlace.name : "Last viewed";
   body.innerHTML = `
     <div class="set-row"><label>Temperature</label>${seg("units", state.units)}</div>
+    <div class="set-row"><label>Theme</label>${seg("themeMode", state.themeMode)}</div>
+    <div class="set-row"><label>Accent</label><div class="set-accents">${ACCENTS.map((c) => `<button class="set-swatch${state.accent === c ? " active" : ""}" data-accent="${c}" style="background:${c}" aria-label="Accent ${c}"></button>`).join("")}</div></div>
     <div class="set-row"><label>Time format</label>${seg("timeFormat", state.timeFormat)}</div>
     <div class="set-row"><label>Wind speed</label>${seg("windUnit", state.windUnit)}</div>
     <div class="set-row"><label>Pressure</label>${seg("pressureUnit", state.pressureUnit)}</div>
@@ -1311,6 +1334,7 @@ function renderSettings() {
   body.querySelectorAll(".set-seg").forEach((sgEl) => {
     sgEl.querySelectorAll("button").forEach((b) => { b.onclick = () => setSetting(sgEl.dataset.seg, b.dataset.v); });
   });
+  body.querySelectorAll("[data-accent]").forEach((b) => { b.onclick = () => setSetting("accent", b.dataset.accent); });
   const tog = body.querySelector('[data-toggle="reduceMotion"]');
   if (tog) tog.onclick = () => {
     state.reduceMotion = !state.reduceMotion;
@@ -1333,7 +1357,8 @@ function setSetting(key, value) {
   if (key === "units") { setUnits(value); renderSettings(); return; } // needs a refetch
   state[key] = value;
   localStorage.setItem(key, value);
-  rerender();        // client-side only — no refetch
+  if (key === "themeMode" || key === "accent") applyTheme(); // pure CSS, no re-render
+  else rerender();                                           // client-side re-render, no refetch
   renderSettings();
 }
 
