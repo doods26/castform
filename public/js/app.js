@@ -22,7 +22,9 @@ const state = {
   prayerOpen: localStorage.getItem("prayerOpen") === "1",        // prayer card expanded?
   cardOrder: JSON.parse(localStorage.getItem("cardOrder") || "null"),  // custom card order (keys) or null
   cardHidden: JSON.parse(localStorage.getItem("cardHidden") || "[]"),  // hidden card keys
+  cardSpans: JSON.parse(localStorage.getItem("cardSpans") || "{}"),    // per-card column span (3–12)
 };
+const GRID_COLS = 12, MIN_SPAN = 3;
 // Default dashboard order + friendly labels (used by the layout editor).
 const DEFAULT_CARD_ORDER = ["current", "conditions", "radar", "hourly", "daily",
   "history", "marine", "aqi", "sun", "prayer", "lifestyle", "compare"];
@@ -205,7 +207,26 @@ function applyCardLayout() {
   const foot = c.querySelector(":scope > .foot");
   order.forEach((k) => c.insertBefore(byKey[k], foot || null));
   const hidden = new Set(state.cardHidden);
-  Object.entries(byKey).forEach(([k, s]) => s.classList.toggle("lay-hidden", hidden.has(k)));
+  Object.entries(byKey).forEach(([k, s]) => {
+    s.classList.toggle("lay-hidden", hidden.has(k));
+    const n = state.cardSpans[k];
+    s.style.gridColumn = n ? `span ${n}` : "";   // "" → fall back to the sp* class default
+  });
+}
+// A card's effective column span: inline override → sp* class → full width.
+function spanFromClass(s) {
+  for (const n of [4, 5, 6, 7, 8]) if (s.classList.contains("sp" + n)) return n;
+  return GRID_COLS;
+}
+function currentSpan(s) {
+  const m = /span\s+(\d+)/.exec(s.style.gridColumn || "");
+  return m ? +m[1] : spanFromClass(s);
+}
+// Width (px) of one grid column including its gap — to convert drag → columns.
+function gridColumnUnit() {
+  const c = $("content");
+  const gap = parseFloat(getComputedStyle(c).columnGap) || 14;
+  return (c.clientWidth - gap * (GRID_COLS - 1)) / GRID_COLS + gap;
 }
 function persistCardOrder() {
   state.cardOrder = cardSections().map((s) => s.dataset.card);
@@ -236,8 +257,11 @@ function toggleCardHidden(key) {
 function resetLayout() {
   state.cardOrder = DEFAULT_CARD_ORDER.slice();
   state.cardHidden = [];
+  state.cardSpans = {};
   localStorage.setItem("cardOrder", JSON.stringify(state.cardOrder));
   localStorage.setItem("cardHidden", "[]");
+  localStorage.removeItem("cardSpans");
+  cardSections().forEach((s) => { s.style.gridColumn = ""; });   // drop inline span overrides
   applyCardLayout();
   if (layoutEditing) { removeEditUI(); buildEditUI(); }
 }
@@ -283,13 +307,47 @@ function buildEditUI() {
     grip.addEventListener("dragend", () => { s.classList.remove("dragging"); layoutDragKey = null; persistCardOrder(); });
     s.prepend(bar);
     s.classList.toggle("lay-dim", state.cardHidden.includes(key));
+    attachResize(s, key);
   });
   c.addEventListener("dragover", onLayoutDragOver);
+}
+// Corner handle to resize a card's width by snapping its column span to the grid.
+function attachResize(section, key) {
+  const handle = document.createElement("div");
+  handle.className = "card-resize";
+  handle.title = "Drag to resize width";
+  section.appendChild(handle);
+  let startX = 0, startSpan = 0, label = null;
+  const onMove = (e) => {
+    const n = Math.max(MIN_SPAN, Math.min(GRID_COLS,
+      Math.round(startSpan + (e.clientX - startX) / gridColumnUnit())));
+    section.style.gridColumn = `span ${n}`;
+    if (label) label.textContent = `${n} / ${GRID_COLS}`;
+  };
+  const onUp = () => {
+    document.removeEventListener("pointermove", onMove);
+    document.removeEventListener("pointerup", onUp);
+    label?.remove(); label = null;
+    state.cardSpans[key] = currentSpan(section);
+    localStorage.setItem("cardSpans", JSON.stringify(state.cardSpans));
+    window.dispatchEvent(new Event("resize"));   // reflow Chart.js canvases + Leaflet map
+  };
+  handle.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); e.stopPropagation();
+    startX = e.clientX; startSpan = currentSpan(section);
+    label = document.createElement("div");
+    label.className = "card-resize-label";
+    label.textContent = `${startSpan} / ${GRID_COLS}`;
+    section.appendChild(label);
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+  });
 }
 function removeEditUI() {
   const c = $("content");
   c.removeEventListener("dragover", onLayoutDragOver);
-  c.querySelectorAll(":scope > section > .card-edit").forEach((b) => b.remove());
+  c.querySelectorAll(":scope > section > .card-edit, :scope > section > .card-resize, :scope > section > .card-resize-label")
+    .forEach((b) => b.remove());
   cardSections().forEach((s) => s.classList.remove("lay-dim", "dragging"));
 }
 function onLayoutDragOver(e) {
@@ -310,7 +368,7 @@ function showLayoutBar() {
   let bar = $("layoutBar");
   if (!bar) { bar = document.createElement("div"); bar.id = "layoutBar"; bar.className = "layout-bar"; document.body.appendChild(bar); }
   bar.innerHTML =
-    `<span class="lb-hint">✦ Editing layout — drag <b>⠿</b> or use ↑ ↓, tap Hide</span>` +
+    `<span class="lb-hint">✦ Editing layout — reorder (⠿ / ↑ ↓), resize from the corner ◢, Hide</span>` +
     `<button class="btn" id="layoutReset">Reset</button>` +
     `<button class="btn lb-done" id="layoutDone">Done</button>`;
   $("layoutDone").onclick = exitLayoutEdit;
