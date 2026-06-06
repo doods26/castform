@@ -649,24 +649,29 @@ body.editing-layout section[data-card].lay-dim { opacity: 0.5; }
 .ce-hide { min-width: 52px; }
 section[data-card].dragging { opacity: 0.55; }
 
-/* Width-resize handle (corner) — snaps the card's column span to the grid */
+/* 2D corner resize handle — horizontal drag = width (column span),
+   vertical drag = fixed height. */
 .card-resize { display: none; }
 body.editing-layout .card-resize {
-  display: block; position: absolute; right: 5px; bottom: 5px; width: 22px; height: 22px;
-  z-index: 6; cursor: ew-resize; touch-action: none; border-radius: 0 0 14px 0;
+  display: block; position: absolute; right: 4px; bottom: 4px; width: 24px; height: 24px;
+  z-index: 6; cursor: nwse-resize; touch-action: none; border-radius: 0 0 14px 0;
   background:
-    linear-gradient(135deg, transparent 0 45%, var(--accent) 45% 60%, transparent 60% 70%, var(--accent) 70% 85%, transparent 85%);
-  opacity: 0.75;
+    linear-gradient(135deg, transparent 0 38%, var(--accent) 38% 52%, transparent 52% 64%, var(--accent) 64% 78%, transparent 78% 88%, var(--accent) 88% 100%);
+  opacity: 0.7;
 }
 body.editing-layout .card-resize:hover { opacity: 1; }
 .card-resize-label {
-  position: absolute; right: 8px; bottom: 30px; z-index: 7; pointer-events: none;
+  position: absolute; right: 8px; bottom: 32px; z-index: 7; pointer-events: none; white-space: nowrap;
   font-size: 0.72rem; font-weight: 800; color: var(--accent);
   background: rgba(20,28,48,0.92); border: 1px solid var(--stroke);
   border-radius: 7px; padding: 2px 7px;
 }
-/* Single-column on phones → spans are moot; hide the handle to avoid confusion. */
-@media (max-width: 980px) { body.editing-layout .card-resize { display: none; } }
+/* Phones are single-column: width spans AND height overrides are ignored so the
+   mobile layout stays full-width and content-driven; hide the handle too. */
+@media (max-width: 980px) {
+  body.editing-layout .card-resize { display: none; }
+  #content > section.lay-sized { height: auto !important; overflow: visible !important; }
+}
 
 .layout-bar {
   position: fixed; left: 50%; bottom: 0; z-index: 1200;
