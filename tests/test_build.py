@@ -278,8 +278,12 @@ class LayoutEditorTests(unittest.TestCase):
         self.assertIn("function attachResize", js)
         self.assertIn("cardSpans", js)
         self.assertIn("function gridColumnUnit", js)
-        # span must be clamped to the grid so a card can't overflow the boundary.
+        # Width: column span clamped to the grid so a card can't overflow.
         self.assertRegex(js, r"Math\.max\(MIN_SPAN,\s*Math\.min\(GRID_COLS")
+        # Height: a fixed pixel size, clamped between MIN_H and MAX_H.
+        self.assertRegex(js, r"Math\.max\(MIN_H,\s*Math\.min\(MAX_H")
+        self.assertIn("function applyOneCard", js)
+        self.assertIn("function cardCfg", js)
 
     def test_layout_css_present(self):
         css = (PUB / "css" / "styles.css").read_text(encoding="utf-8")

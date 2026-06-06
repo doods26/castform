@@ -21,8 +21,10 @@ on a Raspberry Pi in kiosk mode later. **Zero dependencies** — just Python.
 - **Marine & surf** (coastal locations) — wave height, swell + period, wind waves, sea-surface temp
 - **Desktop notifications** — opt-in alerts for imminent rain and NWS warnings
 - **Customizable dashboard** — Settings → *Customize* to **hide, reorder, and resize cards**
-  (drag to reorder or ↑↓; drag a card's corner to set its width on the 12-column grid; Hide/Show),
-  remembered between visits; one-tap Reset restores the default layout
+  (drag to reorder or ↑↓; drag a card's corner to set its **width and height** — width snaps to the
+  12-column grid, height is free; Hide/Show), remembered between visits; one-tap Reset restores the
+  default. Heights stay content-driven until you change them, and on phones the grid is single-column
+  so overrides are ignored — the layout stays clean with no dead space
 - **Auto-refresh** every 10 minutes with an "updated" toast; **fullscreen kiosk** button for wall displays
 - **Animated radar time-lapse** — live precipitation radar on a dark map (RainViewer + Leaflet)
   with play/pause, a scrubber, and speed control, so you can watch storms move into the area.

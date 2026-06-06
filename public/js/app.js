@@ -209,9 +209,32 @@ function applyCardLayout() {
   const hidden = new Set(state.cardHidden);
   Object.entries(byKey).forEach(([k, s]) => {
     s.classList.toggle("lay-hidden", hidden.has(k));
-    const n = state.cardSpans[k];
-    s.style.gridColumn = n ? `span ${n}` : "";   // "" → fall back to the sp* class default
+    applyOneCard(s, k);
   });
+}
+// Per-card size config: { c: columns(3–12), h: height(px) }; either may be unset.
+// Back-compat: an old plain-number value means a column span.
+const MIN_H = 140, MAX_H = 1400;
+function cardCfg(key) {
+  const v = state.cardSpans[key];
+  if (v == null) return {};
+  return typeof v === "number" ? { c: v } : v;
+}
+function setCardCfg(key, patch) {
+  const next = { ...cardCfg(key), ...patch };
+  Object.keys(next).forEach((k) => { if (next[k] == null) delete next[k]; });
+  if (Object.keys(next).length) state.cardSpans[key] = next; else delete state.cardSpans[key];
+  localStorage.setItem("cardSpans", JSON.stringify(state.cardSpans));
+}
+// Apply a single card's width (column span) + optional fixed height.
+function applyOneCard(s, key) {
+  const cfg = cardCfg(key);
+  s.style.gridColumn = cfg.c ? `span ${cfg.c}` : "";        // "" → fall back to sp* class
+  if (cfg.h) {
+    s.style.height = cfg.h + "px"; s.style.overflow = "auto"; s.classList.add("lay-sized");
+  } else {
+    s.style.height = ""; s.style.overflow = ""; s.classList.remove("lay-sized");
+  }
 }
 // A card's effective column span: inline override → sp* class → full width.
 function spanFromClass(s) {
@@ -261,7 +284,10 @@ function resetLayout() {
   localStorage.setItem("cardOrder", JSON.stringify(state.cardOrder));
   localStorage.setItem("cardHidden", "[]");
   localStorage.removeItem("cardSpans");
-  cardSections().forEach((s) => { s.style.gridColumn = ""; });   // drop inline span overrides
+  cardSections().forEach((s) => {                                // drop inline size overrides
+    s.style.gridColumn = ""; s.style.height = ""; s.style.overflow = "";
+    s.classList.remove("lay-sized");
+  });
   applyCardLayout();
   if (layoutEditing) { removeEditUI(); buildEditUI(); }
 }
@@ -311,33 +337,48 @@ function buildEditUI() {
   });
   c.addEventListener("dragover", onLayoutDragOver);
 }
-// Corner handle to resize a card's width by snapping its column span to the grid.
+// Corner handle to resize a card in 2 dimensions: horizontal drag snaps the
+// column span to the grid (width); vertical drag sets a fixed pixel height.
+// An axis only becomes an override if the user actually drags it, so height
+// stays content-driven (no dead space) until deliberately changed.
 function attachResize(section, key) {
   const handle = document.createElement("div");
   handle.className = "card-resize";
-  handle.title = "Drag to resize width";
+  handle.title = "Drag to resize (width ↔, height ↕)";
   section.appendChild(handle);
-  let startX = 0, startSpan = 0, label = null;
+  let startX = 0, startY = 0, startC = 0, startH = 0, liveC = 0, liveH = 0, label = null;
   const onMove = (e) => {
-    const n = Math.max(MIN_SPAN, Math.min(GRID_COLS,
-      Math.round(startSpan + (e.clientX - startX) / gridColumnUnit())));
-    section.style.gridColumn = `span ${n}`;
-    if (label) label.textContent = `${n} / ${GRID_COLS}`;
+    liveC = Math.max(MIN_SPAN, Math.min(GRID_COLS,
+      Math.round(startC + (e.clientX - startX) / gridColumnUnit())));
+    liveH = Math.max(MIN_H, Math.min(MAX_H, startH + (e.clientY - startY)));
+    section.style.gridColumn = `span ${liveC}`;
+    section.style.height = liveH + "px";
+    section.style.overflow = "auto";
+    if (label) label.textContent = `${liveC}/${GRID_COLS} · ${Math.round(liveH)}px`;
   };
-  const onUp = () => {
+  const onUp = (e) => {
     document.removeEventListener("pointermove", onMove);
     document.removeEventListener("pointerup", onUp);
     label?.remove(); label = null;
-    state.cardSpans[key] = currentSpan(section);
-    localStorage.setItem("cardSpans", JSON.stringify(state.cardSpans));
+    const cfg = cardCfg(key);
+    // Only persist an axis the user meaningfully dragged.
+    const draggedX = Math.abs(e.clientX - startX) > gridColumnUnit() / 2;
+    const draggedY = Math.abs(e.clientY - startY) > 16;
+    setCardCfg(key, {
+      c: draggedX ? liveC : (cfg.c ?? null),
+      h: draggedY ? Math.round(liveH) : (cfg.h ?? null),
+    });
+    applyOneCard(section, key);                  // snap back to persisted config
     window.dispatchEvent(new Event("resize"));   // reflow Chart.js canvases + Leaflet map
   };
   handle.addEventListener("pointerdown", (e) => {
     e.preventDefault(); e.stopPropagation();
-    startX = e.clientX; startSpan = currentSpan(section);
+    startX = e.clientX; startY = e.clientY;
+    startC = liveC = currentSpan(section);
+    startH = liveH = Math.round(section.getBoundingClientRect().height);
     label = document.createElement("div");
     label.className = "card-resize-label";
-    label.textContent = `${startSpan} / ${GRID_COLS}`;
+    label.textContent = `${startC}/${GRID_COLS} · ${startH}px`;
     section.appendChild(label);
     document.addEventListener("pointermove", onMove);
     document.addEventListener("pointerup", onUp);
@@ -368,7 +409,7 @@ function showLayoutBar() {
   let bar = $("layoutBar");
   if (!bar) { bar = document.createElement("div"); bar.id = "layoutBar"; bar.className = "layout-bar"; document.body.appendChild(bar); }
   bar.innerHTML =
-    `<span class="lb-hint">✦ Editing layout — reorder (⠿ / ↑ ↓), resize from the corner ◢, Hide</span>` +
+    `<span class="lb-hint">✦ Editing — reorder (⠿ / ↑ ↓), drag corner ◢ to resize width &amp; height, Hide</span>` +
     `<button class="btn" id="layoutReset">Reset</button>` +
     `<button class="btn lb-done" id="layoutDone">Done</button>`;
   $("layoutDone").onclick = exitLayoutEdit;
