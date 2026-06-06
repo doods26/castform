@@ -42,6 +42,11 @@ on a Raspberry Pi in kiosk mode later. **Zero dependencies** — just Python.
 - **Sun & daylight** — animated sun-arc with sunrise, sunset, day length, **golden-hour** window,
   **moon phase** + illumination, and **daylight gained/lost** vs yesterday
 - **Severe-weather alerts** — official NWS watches/warnings overlay (US locations)
+- **Islamic prayer times** *(optional, enable in Settings)* — the five daily prayers + sunrise
+  with a "now / next" countdown, computed offline from solar geometry (calculation method
+  auto-detected by region, Standard Asr). Replaces the Sun card when on, folding the sun/moon
+  details back in, plus a **Qibla compass** (bearing + distance to the Kaaba) with an optional
+  live needle that rotates with your phone.
 - **Anywhere on Earth** — search any city; the page theme + background animate to match
   the weather (sun, clouds, rain overlay, snow, storm) and day/night.
 
@@ -136,6 +141,7 @@ weather/
     └── js/
         ├── app.js       # fetch + render everything
         ├── wmo.js       # WMO weather-code → label/theme + self-contained SVG icons
+        ├── prayer.js    # offline prayer-time + Qibla calculation (no deps)
         └── chart.umd.min.js   # vendored Chart.js (no CDN)
 ```
 

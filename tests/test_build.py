@@ -9,6 +9,8 @@ Offline & side-effect-free: the standalone bundle is assembled in memory
 """
 import json
 import re
+import shutil
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -46,7 +48,7 @@ class StandaloneBundleTests(unittest.TestCase):
     """Reproduce main()'s JS assembly in memory and assert the invariants."""
 
     def _assemble_js(self):
-        libs = ["js/wmo.js", "js/gauge.js", "js/effects.js", "js/radar.js"]
+        libs = ["js/wmo.js", "js/gauge.js", "js/effects.js", "js/radar.js", "js/prayer.js"]
         parts = ["const __NS__ = {};", bs.read("js/standalone-api.js")]
         for rel in libs:
             parts.append(bs.bundle_module(bs.read(rel), is_entry=False))
@@ -214,6 +216,92 @@ class SettingsSheetTests(unittest.TestCase):
         # up new cache-busted CSS/JS — the reason updates didn't reach the app.
         sw = (PUB / "sw.js").read_text(encoding="utf-8")
         self.assertIn('req.mode === "navigate"', sw)
+
+
+class PrayerCardTests(unittest.TestCase):
+    """Static wiring for the prayer-times card, Qibla, and install button."""
+
+    def test_prayer_module_exports(self):
+        js = (PUB / "js" / "prayer.js").read_text(encoding="utf-8")
+        for fn in ("prayerTimes", "qiblaBearing", "qiblaDistanceKm",
+                   "compass16", "methodForCountry", "METHODS"):
+            self.assertRegex(js, rf"export\s+(?:function\s+|const\s+){fn}\b",
+                             f"prayer.js must export {fn}")
+
+    def test_index_has_prayer_and_install_hooks(self):
+        html = (PUB / "index.html").read_text(encoding="utf-8")
+        for needle in ('id="sunSection"', 'id="praySection"', 'id="prayerCard"', 'id="installBtn"'):
+            self.assertIn(needle, html, f"index.html missing {needle}")
+
+    def test_app_wires_prayer_and_install(self):
+        js = (PUB / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('from "./prayer.js"', js)
+        self.assertGreaterEqual(len(re.findall(r"renderPrayer\(f\)", js)), 2,
+                                "renderPrayer must run on both render and rerender")
+        self.assertIn("function setupInstall", js)
+        self.assertIn("beforeinstallprompt", js)
+        self.assertIn('data-toggle="prayer"', js)
+
+    def test_prayer_bundled_into_standalone(self):
+        bundle = (ROOT / "standalone.html").read_text(encoding="utf-8")
+        self.assertIn("qiblaBearing", bundle)
+        self.assertIn("prayerTimes", bundle)
+
+    def test_build_includes_prayer_module(self):
+        build = (ROOT / "build_standalone.py").read_text(encoding="utf-8")
+        self.assertIn("js/prayer.js", build)
+
+
+NODE = shutil.which("node")
+
+
+@unittest.skipUnless(NODE, "node not available — skipping prayer-math validation")
+class PrayerMathTests(unittest.TestCase):
+    """Validate the actual prayer/Qibla math by running prayer.js under Node.
+    (GitHub's ubuntu runners ship Node, so this runs in CI too.)"""
+
+    def _run(self, body):
+        uri = (PUB / "js" / "prayer.js").as_uri()
+        script = (f"import('{uri}').then(m => {{ {body} }})"
+                  f".catch(e => {{ console.error(e); process.exit(2); }});")
+        p = subprocess.run([NODE, "--input-type=module", "-e", script],
+                           capture_output=True, text=True, timeout=25)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        return json.loads(p.stdout.strip())
+
+    def test_dubai_times_and_qibla(self):
+        r = self._run(
+            "const t=m.prayerTimes({year:2026,month:6,day:5,lat:25.2,lon:55.27,"
+            "tzOffset:4,method:m.methodForCountry('AE'),asr:'standard'});"
+            "console.log(JSON.stringify({sunrise:t.sunrise,maghrib:t.maghrib,isha:t.isha,"
+            "qb:m.qiblaBearing(25.2,55.27),qd:m.qiblaDistanceKm(25.2,55.27),"
+            "dir:m.compass16(m.qiblaBearing(25.2,55.27))}));")
+        # Sunrise 05:28 — matches Open-Meteo's published sunrise for that date.
+        self.assertAlmostEqual(r["sunrise"], 5 + 28 / 60, delta=0.05)
+        # Umm al-Qura / Gulf: Isha is exactly Maghrib + 90 min.
+        self.assertAlmostEqual(r["isha"], r["maghrib"] + 1.5, delta=0.02)
+        # Qibla from Dubai points WSW (~258°), ~1631 km to the Kaaba.
+        self.assertAlmostEqual(r["qb"], 258.2, delta=1.5)
+        self.assertEqual(r["dir"], "WSW")
+        self.assertAlmostEqual(r["qd"], 1631, delta=25)
+
+    def test_method_autodetect(self):
+        r = self._run("console.log(JSON.stringify({sa:m.methodForCountry('SA'),"
+                      "us:m.methodForCountry('US'),pk:m.methodForCountry('PK'),"
+                      "fr:m.methodForCountry('FR')}));")
+        self.assertEqual(r, {"sa": "Makkah", "us": "ISNA", "pk": "Karachi", "fr": "MWL"})
+
+    def test_high_latitude_fallback_never_null(self):
+        # Helsinki (~60°N) on the solstice: the sun still rises/sets, but the
+        # 18° Fajr/Isha twilight angle is never reached. The NightMiddle
+        # fallback must still yield real times (not null) bounded to the night.
+        r = self._run(
+            "const t=m.prayerTimes({year:2026,month:6,day:21,lat:60.17,lon:24.94,"
+            "tzOffset:3,method:'MWL',asr:'standard'});"
+            "console.log(JSON.stringify({fajr:t.fajr,isha:t.isha,sunrise:t.sunrise}));")
+        self.assertIsNotNone(r["sunrise"])
+        self.assertIsNotNone(r["fajr"])
+        self.assertIsNotNone(r["isha"])
 
 
 if __name__ == "__main__":

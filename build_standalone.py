@@ -54,7 +54,7 @@ def main():
     shim = read("js/standalone-api.js")
 
     # Order matters: dependencies before the entry (app.js).
-    libs = ["js/wmo.js", "js/gauge.js", "js/effects.js", "js/radar.js"]
+    libs = ["js/wmo.js", "js/gauge.js", "js/effects.js", "js/radar.js", "js/prayer.js"]
     parts = ["const __NS__ = {};", shim]
     for rel in libs:
         parts.append(bundle_module(read(rel), is_entry=False))

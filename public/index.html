@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-title" content="Castform" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="stylesheet" href="/vendor/leaflet.css" />
-  <link rel="stylesheet" href="/css/styles.css?b=8" />
+  <link rel="stylesheet" href="/css/styles.css?b=9" />
   <script src="/js/chart.umd.min.js"></script>
   <script src="/vendor/leaflet.js"></script>
 </head>
@@ -40,6 +40,7 @@
         <button class="btn" id="geoBtn" title="Use my location">📍</button>
         <button class="btn" id="notifyBtn" title="Weather alerts">🔕 Alerts</button>
         <button class="btn" id="fullscreenBtn" title="Fullscreen kiosk mode">⛶ Kiosk</button>
+        <button class="btn hidden" id="installBtn" title="Install Castform as an app">⬇ Install</button>
         <button class="btn icon-btn" id="settingsBtn" title="Settings">⚙</button>
         <div class="unit-toggle" id="unitToggle">
           <button data-units="imperial" class="active">°F</button>
@@ -144,7 +145,8 @@
 
       <!-- Air quality + Sun -->
       <section class="card sp6" id="aqiCard"><h2><span class="h2-ico">🍃</span>Air quality</h2><div id="aqiBody"></div></section>
-      <section class="card sp6"><h2><span class="h2-ico">🌅</span>Sun &amp; daylight</h2><div class="sun-card" id="sunCard"></div></section>
+      <section class="card sp6" id="sunSection"><h2><span class="h2-ico">🌅</span>Sun &amp; daylight</h2><div class="sun-card" id="sunCard"></div></section>
+      <section class="card sp6 hidden" id="praySection"><div id="prayerCard"></div></section>
 
       <!-- Lifestyle / activity indices -->
       <section class="card sp6" id="lifestyleCard">
@@ -168,6 +170,6 @@
     </main>
   </div>
 
-  <script type="module" src="/js/app.js?b=8"></script>
+  <script type="module" src="/js/app.js?b=9"></script>
 </body>
 </html>
