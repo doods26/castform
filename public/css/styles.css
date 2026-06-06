@@ -277,6 +277,8 @@ header.topbar {
 
 /* Radar full-screen overlay */
 body.radar-fs-open { overflow: hidden; }
+/* Lock the page behind the settings sheet so iOS doesn't scroll-chain it. */
+body.settings-open { overflow: hidden; }
 .radar-card.radar-fullscreen {
   position: fixed; inset: 0; z-index: 1000; margin: 0; border-radius: 0;
   display: flex; flex-direction: column;
@@ -628,12 +630,72 @@ body.radar-fs-open { overflow: hidden; }
 .life-bar i { display: block; height: 100%; border-radius: 3px; }
 .life-reason { font-size: 0.74rem; color: var(--muted); }
 
+/* Prayer times card ------------------------------------------------------- */
+.pray-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; margin-bottom: 14px; }
+.pray-title { display: flex; align-items: center; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 1.4px; color: var(--muted); font-weight: 700; }
+.pray-method { font-size: 0.66rem; color: var(--faint); text-align: right; line-height: 1.3; }
+.pray-summary { display: flex; align-items: stretch; gap: 12px; cursor: pointer; user-select: none; }
+.pray-cell { flex: 1; min-width: 0; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,0.04); border: 1px solid var(--stroke); }
+.pray-cell.next { background: linear-gradient(100deg, rgba(111,183,255,0.20), rgba(111,183,255,0.05)); border-color: rgba(111,183,255,0.40); }
+.pray-cell .k { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.pray-cell .nm { font-size: 1.12rem; font-weight: 800; margin-top: 5px; display: flex; align-items: baseline; gap: 7px; }
+.pray-cell .nm .ar { font-size: 0.8rem; color: var(--faint); font-weight: 600; }
+.pray-cell .tm { font-size: 0.9rem; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.pray-cell.next .tm { color: var(--accent); font-weight: 700; }
+.pray-chev { display: flex; align-items: center; justify-content: center; width: 24px; flex: 0 0 auto; color: var(--faint); font-size: 1.1rem; transition: transform 0.25s; }
+.pray.open .pray-chev { transform: rotate(180deg); }
+.pray-hint { text-align: center; font-size: 0.68rem; color: var(--faint); margin-top: 9px; letter-spacing: 0.4px; }
+.pray.open .pray-hint { display: none; }
+.pray-more { max-height: 0; opacity: 0; overflow: hidden; transition: max-height 0.35s ease, opacity 0.25s, margin 0.35s; }
+.pray.open .pray-more { max-height: 1200px; opacity: 1; margin-top: 14px; }
+
+.pray-rows { display: grid; gap: 2px; }
+.pray-row { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 11px; border-left: 3px solid transparent; }
+.pray-row .pray-nm { font-weight: 700; font-size: 0.98rem; display: flex; align-items: center; }
+.pray-row .pray-ar { color: var(--faint); font-size: 0.8rem; margin-left: 6px; font-weight: 500; }
+.pray-row .pray-tm { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1rem; }
+.pray-row.passed { opacity: 0.45; }
+.pray-row.now-row { background: rgba(163,230,53,0.10); border-left-color: var(--lime); }
+.pray-row.next-row { background: rgba(111,183,255,0.12); border-left-color: var(--accent); }
+.pray-row.sun { opacity: 0.62; }
+.pray-row.sun .pray-nm, .pray-row.sun .pray-tm { font-weight: 600; color: var(--muted); }
+.pray-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: 0 0 auto; }
+.pray-row.now-row .pray-dot { background: var(--lime); }
+.pray-row.next-row .pray-dot { background: var(--accent); box-shadow: 0 0 0 3px rgba(111,183,255,0.25); }
+.pray-row.passed .pray-dot { background: rgba(255,255,255,0.18); }
+.pray-tag { margin-left: 8px; font-size: 0.6rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; }
+.pray-tag.now { background: rgba(163,230,53,0.18); color: var(--lime); }
+.pray-tag.next { background: rgba(111,183,255,0.18); color: var(--accent); }
+
+.pray-qibla { display: flex; align-items: center; gap: 16px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--stroke); }
+.qdial { flex: 0 0 auto; }
+.qdial #qiblaNeedle, .qdial #qiblaRing { transition: transform 0.15s ease-out; }
+.qmeta .k { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.9px; color: var(--faint); font-weight: 700; }
+.qmeta .v { font-size: 1.45rem; font-weight: 800; line-height: 1.1; margin-top: 2px; }
+.qmeta .v .dir { font-size: 1rem; color: var(--muted); }
+.qmeta .x { font-size: 0.82rem; color: var(--muted); margin-top: 3px; }
+.pray-live { display: inline-flex; align-items: center; gap: 6px; margin-top: 9px; font-size: 0.72rem; color: var(--accent);
+  border: 1px solid rgba(111,183,255,0.4); border-radius: 999px; padding: 5px 11px; background: rgba(111,183,255,0.08); cursor: pointer; }
+.pray-live.on { color: var(--lime); border-color: rgba(163,230,53,0.5); background: rgba(163,230,53,0.10); }
+
+.pray-sun { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--stroke); }
+.pray-sun .ss { text-align: center; }
+.pray-sun .k { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.6px; color: var(--faint); font-weight: 700; }
+.pray-sun .v { font-size: 0.92rem; font-weight: 700; margin-top: 3px; }
+.pray-sun .v small { font-weight: 600; color: var(--muted); }
+.reduce-motion .pray-more, .reduce-motion .pray-chev,
+.reduce-motion .qdial #qiblaNeedle, .reduce-motion .qdial #qiblaRing { transition: none; }
+
 /* Settings overlay + panel */
 .settings-overlay { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center;
-  justify-content: center; padding: 20px; background: rgba(6,10,20,0.6); backdrop-filter: blur(6px);
+  justify-content: center; background: rgba(6,10,20,0.6); backdrop-filter: blur(6px);
+  /* Keep the panel clear of the notch (top) & home indicator (bottom) on iOS. */
+  padding: calc(20px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom));
   animation: fadeIn .2s ease both; }
 .settings-overlay.hidden { display: none; }
-.settings-panel { width: 100%; max-width: 460px; max-height: 88vh; overflow-y: auto;
+.settings-panel { width: 100%; max-width: 460px; max-height: 88dvh; overflow-y: auto;
+  /* Contain the scroll so it doesn't chain to the page behind (iOS PWA bug). */
+  overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
   background: linear-gradient(180deg, #1a2740, #121b30); border: 1px solid var(--stroke);
   border-radius: 20px; box-shadow: var(--shadow); padding: 18px 20px 20px; }
 .settings-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
@@ -722,8 +784,9 @@ body.radar-fs-open { overflow: hidden; }
   .sun-arc { width: 100%; max-width: 240px; }
 
   /* Settings panel: let rows wrap so segmented controls don't overflow */
-  .settings-overlay { padding: 12px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); align-items: flex-end; }
-  .settings-panel { max-height: 92vh; border-radius: 18px; }
+  .settings-overlay { align-items: flex-end;
+    padding: calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom)); }
+  .settings-panel { max-height: 88dvh; border-radius: 18px; }
   .set-row { flex-wrap: wrap; gap: 8px; }
   .set-row > label { flex: 1 1 100%; }
   .set-seg { justify-content: flex-start; }

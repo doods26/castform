@@ -272,6 +272,8 @@ header.topbar {
   border-top: 1px solid var(--stroke); font-size: 0.8rem; color: var(--muted); }
 /* Radar full-screen overlay */
 body.radar-fs-open { overflow: hidden; }
+/* Lock the page behind the settings sheet so iOS doesn't scroll-chain it. */
+body.settings-open { overflow: hidden; }
 .radar-card.radar-fullscreen {
   position: fixed; inset: 0; z-index: 1000; margin: 0; border-radius: 0;
   display: flex; flex-direction: column;
@@ -585,12 +587,68 @@ body.radar-fs-open { overflow: hidden; }
 .life-bar { height: 5px; border-radius: 3px; background: rgba(255,255,255,0.1); overflow: hidden; margin: 8px 0 6px; }
 .life-bar i { display: block; height: 100%; border-radius: 3px; }
 .life-reason { font-size: 0.74rem; color: var(--muted); }
+/* Prayer times card ------------------------------------------------------- */
+.pray-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; margin-bottom: 14px; }
+.pray-title { display: flex; align-items: center; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 1.4px; color: var(--muted); font-weight: 700; }
+.pray-method { font-size: 0.66rem; color: var(--faint); text-align: right; line-height: 1.3; }
+.pray-summary { display: flex; align-items: stretch; gap: 12px; cursor: pointer; user-select: none; }
+.pray-cell { flex: 1; min-width: 0; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,0.04); border: 1px solid var(--stroke); }
+.pray-cell.next { background: linear-gradient(100deg, rgba(111,183,255,0.20), rgba(111,183,255,0.05)); border-color: rgba(111,183,255,0.40); }
+.pray-cell .k { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.pray-cell .nm { font-size: 1.12rem; font-weight: 800; margin-top: 5px; display: flex; align-items: baseline; gap: 7px; }
+.pray-cell .nm .ar { font-size: 0.8rem; color: var(--faint); font-weight: 600; }
+.pray-cell .tm { font-size: 0.9rem; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.pray-cell.next .tm { color: var(--accent); font-weight: 700; }
+.pray-chev { display: flex; align-items: center; justify-content: center; width: 24px; flex: 0 0 auto; color: var(--faint); font-size: 1.1rem; transition: transform 0.25s; }
+.pray.open .pray-chev { transform: rotate(180deg); }
+.pray-hint { text-align: center; font-size: 0.68rem; color: var(--faint); margin-top: 9px; letter-spacing: 0.4px; }
+.pray.open .pray-hint { display: none; }
+.pray-more { max-height: 0; opacity: 0; overflow: hidden; transition: max-height 0.35s ease, opacity 0.25s, margin 0.35s; }
+.pray.open .pray-more { max-height: 1200px; opacity: 1; margin-top: 14px; }
+.pray-rows { display: grid; gap: 2px; }
+.pray-row { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 11px; border-left: 3px solid transparent; }
+.pray-row .pray-nm { font-weight: 700; font-size: 0.98rem; display: flex; align-items: center; }
+.pray-row .pray-ar { color: var(--faint); font-size: 0.8rem; margin-left: 6px; font-weight: 500; }
+.pray-row .pray-tm { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1rem; }
+.pray-row.passed { opacity: 0.45; }
+.pray-row.now-row { background: rgba(163,230,53,0.10); border-left-color: var(--lime); }
+.pray-row.next-row { background: rgba(111,183,255,0.12); border-left-color: var(--accent); }
+.pray-row.sun { opacity: 0.62; }
+.pray-row.sun .pray-nm, .pray-row.sun .pray-tm { font-weight: 600; color: var(--muted); }
+.pray-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: 0 0 auto; }
+.pray-row.now-row .pray-dot { background: var(--lime); }
+.pray-row.next-row .pray-dot { background: var(--accent); box-shadow: 0 0 0 3px rgba(111,183,255,0.25); }
+.pray-row.passed .pray-dot { background: rgba(255,255,255,0.18); }
+.pray-tag { margin-left: 8px; font-size: 0.6rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; }
+.pray-tag.now { background: rgba(163,230,53,0.18); color: var(--lime); }
+.pray-tag.next { background: rgba(111,183,255,0.18); color: var(--accent); }
+.pray-qibla { display: flex; align-items: center; gap: 16px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--stroke); }
+.qdial { flex: 0 0 auto; }
+.qdial #qiblaNeedle, .qdial #qiblaRing { transition: transform 0.15s ease-out; }
+.qmeta .k { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.9px; color: var(--faint); font-weight: 700; }
+.qmeta .v { font-size: 1.45rem; font-weight: 800; line-height: 1.1; margin-top: 2px; }
+.qmeta .v .dir { font-size: 1rem; color: var(--muted); }
+.qmeta .x { font-size: 0.82rem; color: var(--muted); margin-top: 3px; }
+.pray-live { display: inline-flex; align-items: center; gap: 6px; margin-top: 9px; font-size: 0.72rem; color: var(--accent);
+  border: 1px solid rgba(111,183,255,0.4); border-radius: 999px; padding: 5px 11px; background: rgba(111,183,255,0.08); cursor: pointer; }
+.pray-live.on { color: var(--lime); border-color: rgba(163,230,53,0.5); background: rgba(163,230,53,0.10); }
+.pray-sun { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--stroke); }
+.pray-sun .ss { text-align: center; }
+.pray-sun .k { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.6px; color: var(--faint); font-weight: 700; }
+.pray-sun .v { font-size: 0.92rem; font-weight: 700; margin-top: 3px; }
+.pray-sun .v small { font-weight: 600; color: var(--muted); }
+.reduce-motion .pray-more, .reduce-motion .pray-chev,
+.reduce-motion .qdial #qiblaNeedle, .reduce-motion .qdial #qiblaRing { transition: none; }
 /* Settings overlay + panel */
 .settings-overlay { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center;
-  justify-content: center; padding: 20px; background: rgba(6,10,20,0.6); backdrop-filter: blur(6px);
+  justify-content: center; background: rgba(6,10,20,0.6); backdrop-filter: blur(6px);
+  /* Keep the panel clear of the notch (top) & home indicator (bottom) on iOS. */
+  padding: calc(20px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom));
   animation: fadeIn .2s ease both; }
 .settings-overlay.hidden { display: none; }
-.settings-panel { width: 100%; max-width: 460px; max-height: 88vh; overflow-y: auto;
+.settings-panel { width: 100%; max-width: 460px; max-height: 88dvh; overflow-y: auto;
+  /* Contain the scroll so it doesn't chain to the page behind (iOS PWA bug). */
+  overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
   background: linear-gradient(180deg, #1a2740, #121b30); border: 1px solid var(--stroke);
   border-radius: 20px; box-shadow: var(--shadow); padding: 18px 20px 20px; }
 .settings-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
@@ -667,8 +725,9 @@ body.radar-fs-open { overflow: hidden; }
   /* Sun arc must not overflow the narrow card */
   .sun-arc { width: 100%; max-width: 240px; }
   /* Settings panel: let rows wrap so segmented controls don't overflow */
-  .settings-overlay { padding: 12px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); align-items: flex-end; }
-  .settings-panel { max-height: 92vh; border-radius: 18px; }
+  .settings-overlay { align-items: flex-end;
+    padding: calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom)); }
+  .settings-panel { max-height: 88dvh; border-radius: 18px; }
   .set-row { flex-wrap: wrap; gap: 8px; }
   .set-row > label { flex: 1 1 100%; }
   .set-seg { justify-content: flex-start; }
@@ -708,6 +767,7 @@ body.radar-fs-open { overflow: hidden; }
         <button class="btn" id="geoBtn" title="Use my location">📍</button>
         <button class="btn" id="notifyBtn" title="Weather alerts">🔕 Alerts</button>
         <button class="btn" id="fullscreenBtn" title="Fullscreen kiosk mode">⛶ Kiosk</button>
+        <button class="btn hidden" id="installBtn" title="Install Castform as an app">⬇ Install</button>
         <button class="btn icon-btn" id="settingsBtn" title="Settings">⚙</button>
         <div class="unit-toggle" id="unitToggle">
           <button data-units="imperial" class="active">°F</button>
@@ -800,7 +860,8 @@ body.radar-fs-open { overflow: hidden; }
       </section>
       <!-- Air quality + Sun -->
       <section class="card sp6" id="aqiCard"><h2><span class="h2-ico">🍃</span>Air quality</h2><div id="aqiBody"></div></section>
-      <section class="card sp6"><h2><span class="h2-ico">🌅</span>Sun &amp; daylight</h2><div class="sun-card" id="sunCard"></div></section>
+      <section class="card sp6" id="sunSection"><h2><span class="h2-ico">🌅</span>Sun &amp; daylight</h2><div class="sun-card" id="sunCard"></div></section>
+      <section class="card sp6 hidden" id="praySection"><div id="prayerCard"></div></section>
       <!-- Lifestyle / activity indices -->
       <section class="card sp6" id="lifestyleCard">
         <h2><span class="h2-ico">🎯</span>Good day for…</h2>
@@ -1492,7 +1553,162 @@ async function initRadar(lat, lon, label, pickCb) {
 Object.assign(__NS__, { initRadar });
 })();
 (function(){
-const { describe, icon, compass, initRadar, applyEffects, wireFullscreen, gauge, compassGauge } = __NS__;
+// Islamic prayer times + Qibla — pure, dependency-free calculation.
+//
+// Prayer times use the standard astronomical algorithm popularised by
+// PrayTimes.org (computing each prayer from the sun's altitude angle).
+// Everything here is deterministic math from latitude / longitude / date /
+// UTC-offset — no network, no API key, matching the project's ethos.
+//
+// Times are returned as decimal hours in the LOCATION's local clock
+// (e.g. 5.5 = 5:30 AM), or null when the sun never reaches the required
+// angle and the high-latitude fallback can't be applied.
+// --- degree-based trig helpers -------------------------------------------
+const dtr = (d) => (d * Math.PI) / 180;
+const rtd = (r) => (r * 180) / Math.PI;
+const sin = (d) => Math.sin(dtr(d));
+const cos = (d) => Math.cos(dtr(d));
+const tan = (d) => Math.tan(dtr(d));
+const arcsin = (x) => rtd(Math.asin(x));
+const arccos = (x) => rtd(Math.acos(x));
+const arctan2 = (y, x) => rtd(Math.atan2(y, x));
+const arccot = (x) => rtd(Math.atan(1 / x));
+const fixAngle = (a) => { a %= 360; return a < 0 ? a + 360 : a; };
+const fixHour = (h) => { h %= 24; return h < 0 ? h + 24 : h; };
+// Calculation conventions. fajr/isha are twilight angles (degrees below the
+// horizon). ishaMin = fixed minutes after Maghrib instead of an angle.
+// maghrib defaults to the 0.833° sunset angle unless a method overrides it.
+const METHODS = {
+  MWL:     { label: "Muslim World League",      fajr: 18,   isha: 17 },
+  ISNA:    { label: "ISNA (North America)",     fajr: 15,   isha: 15 },
+  Egypt:   { label: "Egyptian Authority",       fajr: 19.5, isha: 17.5 },
+  Makkah:  { label: "Umm al-Qura (Makkah)",     fajr: 18.5, ishaMin: 90 },
+  Gulf:    { label: "Gulf Region",              fajr: 19.5, ishaMin: 90 },
+  Karachi: { label: "University of Karachi",    fajr: 18,   isha: 18 },
+  Tehran:  { label: "Tehran (Geophysics)",      fajr: 17.7, isha: 14, maghrib: 4.5 },
+  Jafari:  { label: "Shia Ja'fari",             fajr: 16,   isha: 14, maghrib: 4 },
+  Turkey:  { label: "Diyanet (Turkey)",         fajr: 18,   isha: 17 },
+};
+// Pick a sensible default method from the place's ISO country code.
+const COUNTRY_METHOD = {
+  SA: "Makkah", YE: "Makkah",
+  AE: "Gulf", KW: "Gulf", QA: "Gulf", BH: "Gulf", OM: "Gulf",
+  US: "ISNA", CA: "ISNA", MX: "ISNA",
+  PK: "Karachi", IN: "Karachi", BD: "Karachi", AF: "Karachi", LK: "Karachi",
+  EG: "Egypt", SD: "Egypt", LY: "Egypt", DZ: "Egypt", MA: "Egypt", TN: "Egypt",
+  SY: "Egypt", JO: "Egypt", IQ: "Egypt",
+  IR: "Tehran",
+  TR: "Turkey",
+};
+function methodForCountry(cc) {
+  return COUNTRY_METHOD[(cc || "").toUpperCase()] || "MWL";
+}
+// --- solar geometry ------------------------------------------------------
+function julian(y, m, d) {
+  if (m <= 2) { y -= 1; m += 12; }
+  const A = Math.floor(y / 100);
+  const B = 2 - A + Math.floor(A / 4);
+  return Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + d + B - 1524.5;
+}
+function sunPosition(jd) {
+  const D = jd - 2451545.0;
+  const g = fixAngle(357.529 + 0.98560028 * D);
+  const q = fixAngle(280.459 + 0.98564736 * D);
+  const L = fixAngle(q + 1.915 * sin(g) + 0.020 * sin(2 * g));
+  const e = 23.439 - 0.00000036 * D;
+  const declination = arcsin(sin(e) * sin(L));
+  const RA = arctan2(cos(e) * sin(L), cos(L)) / 15;
+  const equation = q / 15 - fixHour(RA);
+  return { declination, equation };
+}
+function midDay(jDate, t) {
+  return fixHour(12 - sunPosition(jDate + t).equation);
+}
+// Time (in hours) when the sun sits `angle` degrees below the horizon.
+function sunAngleTime(jDate, angle, t, lat, dir) {
+  const decl = sunPosition(jDate + t).declination;
+  const noon = midDay(jDate, t);
+  const x = (-sin(angle) - sin(decl) * sin(lat)) / (cos(decl) * cos(lat));
+  if (x < -1 || x > 1) return NaN;            // sun never reaches this angle
+  const T = arccos(x) / 15;
+  return noon + (dir === "ccw" ? -T : T);
+}
+function asrTime(jDate, factor, t, lat) {
+  const decl = sunPosition(jDate + t).declination;
+  const angle = -arccot(factor + tan(Math.abs(lat - decl)));
+  return sunAngleTime(jDate, angle, t, lat, "cw");
+}
+// High-latitude fallback (NightMiddle): when Fajr/Isha can't be reached by
+// angle, bound them to half the night either side of sunrise/sunset.
+function highLatAdjust(times, method) {
+  const night = fixHour(times.sunrise - times.sunset);
+  const half = night / 2;
+  if (isNaN(times.fajr) || fixHour(times.sunrise - times.fajr) > half) {
+    times.fajr = times.sunrise - half;
+  }
+  if (method.isha != null && (isNaN(times.isha) || fixHour(times.isha - times.sunset) > half)) {
+    times.isha = times.sunset + half;
+  }
+}
+// --- public API ----------------------------------------------------------
+// opts: { year, month(1-12), day, lat, lon, tzOffset(hours), method, asr }
+// returns { fajr, sunrise, dhuhr, asr, maghrib, isha, sunset, methodLabel }
+function prayerTimes(opts) {
+  const method = METHODS[opts.method] || METHODS.MWL;
+  const lat = opts.lat, lon = opts.lon;
+  const asrFactor = opts.asr === "hanafi" ? 2 : 1;
+  const jDate = julian(opts.year, opts.month, opts.day) - lon / (15 * 24);
+  let times = { fajr: 5, sunrise: 6, dhuhr: 12, asr: 13, sunset: 18, maghrib: 18, isha: 18 };
+  for (let iter = 0; iter < 3; iter++) {
+    const t = {};
+    for (const k in times) t[k] = times[k] / 24;
+    times = {
+      fajr:    sunAngleTime(jDate, method.fajr, t.fajr, lat, "ccw"),
+      sunrise: sunAngleTime(jDate, 0.833, t.sunrise, lat, "ccw"),
+      dhuhr:   midDay(jDate, t.dhuhr),
+      asr:     asrTime(jDate, asrFactor, t.asr, lat),
+      sunset:  sunAngleTime(jDate, 0.833, t.sunset, lat, "cw"),
+      maghrib: sunAngleTime(jDate, method.maghrib != null ? method.maghrib : 0.833, t.maghrib, lat, "cw"),
+      isha:    method.isha != null ? sunAngleTime(jDate, method.isha, t.isha, lat, "cw") : 18,
+    };
+  }
+  // Shift from astronomical time to the location's local clock.
+  const adj = opts.tzOffset - lon / 15;
+  for (const k in times) times[k] += adj;
+  // Interval-based Isha (e.g. Umm al-Qura: 90 min after Maghrib).
+  if (method.ishaMin != null) times.isha = times.maghrib + method.ishaMin / 60;
+  highLatAdjust(times, method);
+  const out = { methodLabel: method.label };
+  for (const k of ["fajr", "sunrise", "dhuhr", "asr", "maghrib", "isha", "sunset"]) {
+    out[k] = isNaN(times[k]) ? null : fixHour(times[k]);
+  }
+  return out;
+}
+// --- Qibla ---------------------------------------------------------------
+const KAABA_LAT = 21.4225, KAABA_LON = 39.8262;
+// Great-circle initial bearing (degrees from true north) toward the Kaaba.
+function qiblaBearing(lat, lon) {
+  const dLon = dtr(KAABA_LON - lon);
+  const y = Math.sin(dLon);
+  const x = cos(lat) * tan(KAABA_LAT) - sin(lat) * Math.cos(dLon);
+  return fixAngle(rtd(Math.atan2(y, x)));
+}
+// Great-circle distance to the Kaaba in km.
+function qiblaDistanceKm(lat, lon) {
+  const R = 6371;
+  const dLat = dtr(KAABA_LAT - lat), dLon = dtr(KAABA_LON - lon);
+  const a = Math.sin(dLat / 2) ** 2 + cos(lat) * cos(KAABA_LAT) * Math.sin(dLon / 2) ** 2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+const COMPASS16 = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+  "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+function compass16(bearing) {
+  return COMPASS16[Math.round(fixAngle(bearing) / 22.5) % 16];
+}
+Object.assign(__NS__, { METHODS, compass16, methodForCountry, prayerTimes, qiblaBearing, qiblaDistanceKm });
+})();
+(function(){
+const { describe, icon, compass, initRadar, applyEffects, wireFullscreen, gauge, compassGauge, prayerTimes, qiblaBearing, qiblaDistanceKm, compass16, methodForCountry } = __NS__;
 // --- State ----------------------------------------------------------------
 const state = {
   units: localStorage.getItem("units") || "imperial",
@@ -1507,6 +1723,8 @@ const state = {
   defaultPlace: JSON.parse(localStorage.getItem("defaultPlace") || "null"),
   themeMode: localStorage.getItem("themeMode") || "auto",        // auto | dark | light
   accent: localStorage.getItem("accent") || "",                  // "" = default
+  prayer: localStorage.getItem("prayerTimes") === "1",           // show prayer card (replaces Sun)
+  prayerOpen: localStorage.getItem("prayerOpen") === "1",        // prayer card expanded?
 };
 const ACCENTS = ["#6fb7ff", "#54d6c2", "#a3e635", "#ffd45e", "#ff8a5f", "#c08cff"];
 // Language: localizes place names (geocoding) and date/time/number formatting.
@@ -1566,6 +1784,8 @@ function rerender() {
   renderHourly(f);
   renderDaily(f);
   renderSun(f);
+  renderPrayer(f);
+  applyPrayerVisibility();
   renderLifestyle(f, state.lastData.air_quality);
   renderActivityHint(f);
 }
@@ -1591,6 +1811,7 @@ function boot() {
     });
   }
   registerSW();
+  setupInstall();
   wireFullscreen($("fullscreenBtn"));
   buildStars();
   renderFavorites();
@@ -1619,6 +1840,31 @@ function registerSW() {
   const reg = () => navigator.serviceWorker.register("sw.js").catch(() => {});
   if (document.readyState === "complete") reg();
   else window.addEventListener("load", reg);
+}
+// Android / desktop-Chrome "Install app" button. The browser fires
+// beforeinstallprompt when the PWA is installable; we stash it and reveal the
+// toolbar button, then replay it on click. iOS never fires this event (install
+// there is manual via Share → Add to Home Screen), so the button stays hidden.
+let deferredInstall = null;
+function setupInstall() {
+  const btn = $("installBtn");
+  if (!btn) return;
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredInstall = e;
+    btn.classList.remove("hidden");
+  });
+  window.addEventListener("appinstalled", () => {
+    deferredInstall = null;
+    btn.classList.add("hidden");
+  });
+  btn.onclick = async () => {
+    if (!deferredInstall) return;
+    deferredInstall.prompt();
+    try { await deferredInstall.userChoice; } catch (e) {}
+    deferredInstall = null;
+    btn.classList.add("hidden");
+  };
 }
 function setUnits(u) {
   if (u === state.units) return;
@@ -1806,6 +2052,8 @@ function render(place, data) {
   renderDaily(f);
   renderAirQuality(data.air_quality, data.pollen);
   renderSun(f);
+  renderPrayer(f);
+  applyPrayerVisibility();
   renderLifestyle(f, data.air_quality);
   renderMarine(data.marine);
   renderAlerts(data.alerts);
@@ -2374,6 +2622,178 @@ function renderSun(f) {
       <div><div class="k">${moon.emoji} ${moon.name}</div><div class="v2">${moon.illum}% lit</div></div>
     </div>`;
 }
+// --- Islamic prayer times + Qibla -----------------------------------------
+const PRAYER_META = [
+  { key: "fajr",    name: "Fajr",    ar: "الفجر" },
+  { key: "sunrise", name: "Sunrise", ar: "الشروق", sun: true },
+  { key: "dhuhr",   name: "Dhuhr",   ar: "الظهر" },
+  { key: "asr",     name: "Asr",     ar: "العصر" },
+  { key: "maghrib", name: "Maghrib", ar: "المغرب" },
+  { key: "isha",    name: "Isha",    ar: "العشاء" },
+];
+// Decimal local-clock hours → a localized "h:mm" honoring the 12/24h setting.
+function prayerClock(hours) {
+  if (hours == null) return "—";
+  let H = Math.floor(hours), M = Math.round((hours - H) * 60);
+  if (M === 60) { M = 0; H = (H + 1) % 24; }
+  return clk(new Date(2000, 0, 1, H, M), true);
+}
+// Absolute epoch-ms for a local-clock `hours` on calendar date y/mo/da.
+function prayerInstant(y, mo, da, hours, tzOffset) {
+  return Date.UTC(y, mo - 1, da, 0, 0, 0) + (hours - tzOffset) * 3600000;
+}
+function fmtPrayerCountdown(ms) {
+  const m = Math.max(0, Math.round(ms / 60000));
+  const h = Math.floor(m / 60);
+  return h > 0 ? `${h}h ${m % 60}m` : `${m}m`;
+}
+// Toggle Sun card ↔ Prayer card based on the setting.
+function applyPrayerVisibility() {
+  $("sunSection")?.classList.toggle("hidden", state.prayer);
+  $("praySection")?.classList.toggle("hidden", !state.prayer);
+}
+function renderPrayer(f) {
+  const card = $("prayerCard");
+  if (!card) return;
+  const place = state.place;
+  if (!place || !f) return;
+  const tzOffset = (f.utc_offset_seconds || 0) / 3600;
+  // Location-local "now" (read UTC fields off a shifted Date = local wall-clock).
+  const localNow = new Date(Date.now() + tzOffset * 3600000);
+  const y = localNow.getUTCFullYear(), mo = localNow.getUTCMonth() + 1, da = localNow.getUTCDate();
+  const methodKey = methodForCountry(place.country_code);
+  const t = prayerTimes({ year: y, month: mo, day: da, lat: place.lat, lon: place.lon,
+    tzOffset, method: methodKey, asr: "standard" });
+  // The five daily prayers (sunrise excluded) → current & next.
+  const order = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
+  const now = Date.now();
+  const inst = {};
+  order.forEach((k) => { inst[k] = t[k] == null ? null : prayerInstant(y, mo, da, t[k], tzOffset); });
+  let nextKey = order.find((k) => inst[k] != null && inst[k] > now);
+  let curKey, nextAt;
+  if (nextKey) {
+    nextAt = inst[nextKey];
+    const idx = order.indexOf(nextKey);
+    curKey = idx > 0 ? order[idx - 1] : "isha"; // before Fajr → still last night's Isha
+  } else {
+    curKey = "isha"; nextKey = "fajr";          // after Isha → tomorrow's Fajr (~+24h)
+    nextAt = (inst.fajr != null ? inst.fajr : now) + 24 * 3600000;
+  }
+  const meta = (k) => PRAYER_META.find((p) => p.key === k);
+  const cur = meta(curKey), nxt = meta(nextKey);
+  const countdown = fmtPrayerCountdown(nextAt - now);
+  const qb = qiblaBearing(place.lat, place.lon);
+  const qd = qiblaDistanceKm(place.lat, place.lon);
+  const rows = PRAYER_META.map((p) => {
+    let cls = "pray-row";
+    if (p.sun) cls += " sun";
+    else if (p.key === curKey) cls += " now-row";
+    else if (p.key === nextKey) cls += " next-row";
+    else if (inst[p.key] != null && inst[p.key] < now) cls += " passed";
+    const tag = (!p.sun && p.key === curKey) ? `<span class="pray-tag now">now</span>`
+      : (!p.sun && p.key === nextKey) ? `<span class="pray-tag next">next</span>` : "";
+    return `<div class="${cls}"><span class="pray-dot"></span>` +
+      `<span class="pray-nm">${p.name}<span class="pray-ar">${p.ar}</span>${tag}</span>` +
+      `<span class="pray-tm">${prayerClock(t[p.key])}</span></div>`;
+  }).join("");
+  // Sun/moon strip (folded in from the Sun card).
+  const d = f.daily;
+  let si = d.time.indexOf(localNow.toISOString().slice(0, 10)); if (si < 0) si = 1;
+  const rise = d.sunrise && d.sunrise[si] ? new Date(d.sunrise[si]) : null;
+  const set = d.sunset && d.sunset[si] ? new Date(d.sunset[si]) : null;
+  let dayLen = "—";
+  if (rise && set) { const mn = Math.round((set - rise) / 60000); dayLen = `${Math.floor(mn / 60)}h ${mn % 60}m`; }
+  const moon = moonPhase(new Date());
+  card.className = "pray" + (state.prayerOpen ? " open" : "");
+  card.innerHTML = `
+    <div class="pray-head">
+      <span class="pray-title">🕌 Prayer times</span>
+      <span class="pray-method">${t.methodLabel} · auto<br>Standard Asr</span>
+    </div>
+    <div class="pray-summary" id="praySummary">
+      <div class="pray-cell now"><div class="k">🟢 Now</div><div class="nm">${cur.name} <span class="ar">${cur.ar}</span></div><div class="tm">since ${prayerClock(t[curKey])}</div></div>
+      <div class="pray-cell next"><div class="k">Up next</div><div class="nm">${nxt.name} <span class="ar">${nxt.ar}</span></div><div class="tm">${prayerClock(t[nextKey])} · in ${countdown}</div></div>
+      <div class="pray-chev">⌄</div>
+    </div>
+    <div class="pray-hint">tap for all times, Qibla &amp; sun ⌄</div>
+    <div class="pray-more">
+      <div class="pray-rows">${rows}</div>
+      <div class="pray-qibla">
+        <svg width="104" height="104" viewBox="0 0 104 104" class="qdial" aria-label="Qibla compass">
+          <g id="qiblaRing">
+            <circle cx="52" cy="52" r="48" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.18)" stroke-width="1.5"/>
+            <circle cx="52" cy="52" r="40" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+            <g stroke="rgba(255,255,255,0.25)" stroke-width="1.5">
+              <line x1="52" y1="6" x2="52" y2="14"/><line x1="52" y1="90" x2="52" y2="98"/>
+              <line x1="6" y1="52" x2="14" y2="52"/><line x1="90" y1="52" x2="98" y2="52"/></g>
+            <text x="52" y="20" fill="rgba(238,242,251,0.6)" font-size="10" font-weight="700" text-anchor="middle">N</text>
+            <text x="52" y="98" fill="rgba(238,242,251,0.38)" font-size="9" text-anchor="middle">S</text>
+            <text x="96" y="55" fill="rgba(238,242,251,0.38)" font-size="9" text-anchor="middle">E</text>
+            <text x="9" y="55" fill="rgba(238,242,251,0.38)" font-size="9" text-anchor="middle">W</text>
+          </g>
+          <g id="qiblaNeedle" transform="rotate(${qb.toFixed(1)} 52 52)">
+            <line x1="52" y1="52" x2="52" y2="17" stroke="var(--amber)" stroke-width="3" stroke-linecap="round"/>
+            <circle cx="52" cy="17" r="7" fill="var(--amber)"/>
+            <text x="52" y="20.5" font-size="9" text-anchor="middle">🕋</text>
+          </g>
+          <circle cx="52" cy="52" r="4" fill="var(--text)"/>
+        </svg>
+        <div class="qmeta">
+          <div class="k">Qibla direction</div>
+          <div class="v">${Math.round(qb)}° <span class="dir">${compass16(qb)}</span></div>
+          <div class="x">Toward Makkah · ${qd.toLocaleString()} km</div>
+          <button class="pray-live" id="qiblaLive">🧭 Tap for live compass</button>
+        </div>
+      </div>
+      <div class="pray-sun">
+        <div class="ss"><div class="k">Sunrise</div><div class="v">${rise ? clk(rise) : "—"}</div></div>
+        <div class="ss"><div class="k">Sunset</div><div class="v">${set ? clk(set) : "—"}</div></div>
+        <div class="ss"><div class="k">Day length</div><div class="v">${dayLen}</div></div>
+        <div class="ss"><div class="k">Moon</div><div class="v">${moon.emoji} <small>${moon.illum}%</small></div></div>
+      </div>
+    </div>`;
+  $("praySummary").onclick = () => {
+    state.prayerOpen = !state.prayerOpen;
+    localStorage.setItem("prayerOpen", state.prayerOpen ? "1" : "0");
+    card.classList.toggle("open", state.prayerOpen);
+  };
+  const liveBtn = $("qiblaLive");
+  if (liveBtn) liveBtn.onclick = (e) => { e.stopPropagation(); startLiveCompass(liveBtn, qb); };
+}
+// Live Qibla compass via DeviceOrientation. iOS needs a permission tap
+// (granted to THIS origin only); Android/desktop stream events on HTTPS with
+// no prompt. Heading source differs: iOS exposes webkitCompassHeading (true
+// north); Android uses the absolute-orientation alpha.
+let qiblaLiveOn = false;
+function startLiveCompass(btn, qiblaDeg) {
+  const apply = (heading) => {
+    if (heading == null || isNaN(heading)) return;
+    const needle = $("qiblaNeedle"), ring = $("qiblaRing");
+    if (needle) needle.setAttribute("transform", `rotate(${(qiblaDeg - heading).toFixed(1)} 52 52)`);
+    if (ring) ring.setAttribute("transform", `rotate(${(-heading).toFixed(1)} 52 52)`);
+  };
+  const onOrient = (e) => {
+    if (typeof e.webkitCompassHeading === "number") apply(e.webkitCompassHeading);
+    else if (typeof e.alpha === "number") apply(360 - e.alpha);
+  };
+  const begin = () => {
+    if (qiblaLiveOn) return;
+    qiblaLiveOn = true;
+    window.addEventListener("deviceorientationabsolute", onOrient, true);
+    window.addEventListener("deviceorientation", onOrient, true);
+    btn.textContent = "🧭 Live · point your phone";
+    btn.classList.add("on");
+  };
+  if (typeof DeviceOrientationEvent === "undefined") {
+    btn.textContent = "🧭 No compass on this device";
+  } else if (typeof DeviceOrientationEvent.requestPermission === "function") {
+    DeviceOrientationEvent.requestPermission()
+      .then((s) => { s === "granted" ? begin() : (btn.textContent = "🧭 Motion access denied"); })
+      .catch(() => { btn.textContent = "🧭 Compass unavailable"; });
+  } else {
+    begin();
+  }
+}
 // --- Lifestyle / activity indices -----------------------------------------
 // Each index is a weighted blend of factors computed from data we already have.
 function renderLifestyle(f, air) {
@@ -2842,11 +3262,16 @@ function seg(key, value) {
 function setupSettings() {
   const btn = $("settingsBtn"), overlay = $("settingsOverlay");
   if (!btn || !overlay) return;
-  btn.onclick = () => { renderSettings(); overlay.classList.remove("hidden"); };
+  // Toggle a body class so the page behind is scroll-locked — without it iOS
+  // scroll-chains the page and the settings sheet barely scrolls (its lower
+  // rows become unreachable in the installed PWA).
+  const open = () => { renderSettings(); overlay.classList.remove("hidden"); document.body.classList.add("settings-open"); };
+  const close = () => { overlay.classList.add("hidden"); document.body.classList.remove("settings-open"); };
+  btn.onclick = open;
   overlay.addEventListener("click", (e) => {
-    if (e.target === overlay || e.target.closest("[data-close]")) overlay.classList.add("hidden");
+    if (e.target === overlay || e.target.closest("[data-close]")) close();
   });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") overlay.classList.add("hidden"); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !overlay.classList.contains("hidden")) close(); });
 }
 function renderSettings() {
   const body = $("settingsBody");
@@ -2861,6 +3286,8 @@ function renderSettings() {
     <div class="set-row"><label>Time format</label>${seg("timeFormat", state.timeFormat)}</div>
     <div class="set-row"><label>Wind speed</label>${seg("windUnit", state.windUnit)}</div>
     <div class="set-row"><label>Pressure</label>${seg("pressureUnit", state.pressureUnit)}</div>
+    <div class="set-row"><label>Prayer times<span class="set-hint">Replaces the Sun card · method auto-detected</span></label>
+      <button class="set-toggle ${state.prayer ? "on" : ""}" data-toggle="prayer" aria-pressed="${state.prayer}"><span></span></button></div>
     <div class="set-row"><label>Reduce motion<span class="set-hint">Calmer — fewer animations</span></label>
       <button class="set-toggle ${state.reduceMotion ? "on" : ""}" data-toggle="reduceMotion" aria-pressed="${state.reduceMotion}"><span></span></button></div>
     <div class="set-row"><label>Startup location<span class="set-hint">Opens to ${startup}</span></label>
@@ -2879,6 +3306,13 @@ function renderSettings() {
     state.reduceMotion = !state.reduceMotion;
     localStorage.setItem("reduceMotion", state.reduceMotion ? "1" : "0");
     applyReduceMotion(); renderSettings();
+  };
+  const ptog = body.querySelector('[data-toggle="prayer"]');
+  if (ptog) ptog.onclick = () => {
+    state.prayer = !state.prayer;
+    localStorage.setItem("prayerTimes", state.prayer ? "1" : "0");
+    if (state.prayer && state.lastData) renderPrayer(state.lastData.forecast);
+    applyPrayerVisibility(); renderSettings();
   };
   const act = (n, fn) => { const el = body.querySelector(`[data-act="${n}"]`); if (el) el.onclick = fn; };
   act("setdefault", () => {
