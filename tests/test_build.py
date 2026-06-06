@@ -273,11 +273,20 @@ class LayoutEditorTests(unittest.TestCase):
         self.assertIn("applyCardLayout()", js)            # applied on boot
         self.assertIn('data-act="editlayout"', js)        # settings entry point
 
+    def test_app_wires_card_resize(self):
+        js = (PUB / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function attachResize", js)
+        self.assertIn("cardSpans", js)
+        self.assertIn("function gridColumnUnit", js)
+        # span must be clamped to the grid so a card can't overflow the boundary.
+        self.assertRegex(js, r"Math\.max\(MIN_SPAN,\s*Math\.min\(GRID_COLS")
+
     def test_layout_css_present(self):
         css = (PUB / "css" / "styles.css").read_text(encoding="utf-8")
         self.assertRegex(css, r"\.lay-hidden\s*\{[^}]*display:\s*none")
         self.assertIn("editing-layout", css)
         self.assertIn(".layout-bar", css)
+        self.assertIn(".card-resize", css)
 
     def test_layout_in_standalone_bundle(self):
         bundle = (ROOT / "standalone.html").read_text(encoding="utf-8")

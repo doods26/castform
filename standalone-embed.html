@@ -605,6 +605,24 @@ body.editing-layout section[data-card].lay-dim { opacity: 0.5; }
 .ce-btn:hover { background: var(--glass-strong); }
 .ce-hide { min-width: 52px; }
 section[data-card].dragging { opacity: 0.55; }
+/* Width-resize handle (corner) — snaps the card's column span to the grid */
+.card-resize { display: none; }
+body.editing-layout .card-resize {
+  display: block; position: absolute; right: 5px; bottom: 5px; width: 22px; height: 22px;
+  z-index: 6; cursor: ew-resize; touch-action: none; border-radius: 0 0 14px 0;
+  background:
+    linear-gradient(135deg, transparent 0 45%, var(--accent) 45% 60%, transparent 60% 70%, var(--accent) 70% 85%, transparent 85%);
+  opacity: 0.75;
+}
+body.editing-layout .card-resize:hover { opacity: 1; }
+.card-resize-label {
+  position: absolute; right: 8px; bottom: 30px; z-index: 7; pointer-events: none;
+  font-size: 0.72rem; font-weight: 800; color: var(--accent);
+  background: rgba(20,28,48,0.92); border: 1px solid var(--stroke);
+  border-radius: 7px; padding: 2px 7px;
+}
+/* Single-column on phones → spans are moot; hide the handle to avoid confusion. */
+@media (max-width: 980px) { body.editing-layout .card-resize { display: none; } }
 .layout-bar {
   position: fixed; left: 50%; bottom: 0; z-index: 1200;
   transform: translateX(-50%) translateY(130%); transition: transform 0.3s ease;
@@ -1759,7 +1777,9 @@ const state = {
   prayerOpen: localStorage.getItem(&quot;prayerOpen&quot;) === &quot;1&quot;,        // prayer card expanded?
   cardOrder: JSON.parse(localStorage.getItem(&quot;cardOrder&quot;) || &quot;null&quot;),  // custom card order (keys) or null
   cardHidden: JSON.parse(localStorage.getItem(&quot;cardHidden&quot;) || &quot;[]&quot;),  // hidden card keys
+  cardSpans: JSON.parse(localStorage.getItem(&quot;cardSpans&quot;) || &quot;{}&quot;),    // per-card column span (3–12)
 };
+const GRID_COLS = 12, MIN_SPAN = 3;
 // Default dashboard order + friendly labels (used by the layout editor).
 const DEFAULT_CARD_ORDER = [&quot;current&quot;, &quot;conditions&quot;, &quot;radar&quot;, &quot;hourly&quot;, &quot;daily&quot;,
   &quot;history&quot;, &quot;marine&quot;, &quot;aqi&quot;, &quot;sun&quot;, &quot;prayer&quot;, &quot;lifestyle&quot;, &quot;compare&quot;];
@@ -1930,7 +1950,26 @@ function applyCardLayout() {
   const foot = c.querySelector(&quot;:scope > .foot&quot;);
   order.forEach((k) => c.insertBefore(byKey[k], foot || null));
   const hidden = new Set(state.cardHidden);
-  Object.entries(byKey).forEach(([k, s]) => s.classList.toggle(&quot;lay-hidden&quot;, hidden.has(k)));
+  Object.entries(byKey).forEach(([k, s]) => {
+    s.classList.toggle(&quot;lay-hidden&quot;, hidden.has(k));
+    const n = state.cardSpans[k];
+    s.style.gridColumn = n ? `span ${n}` : &quot;&quot;;   // &quot;&quot; → fall back to the sp* class default
+  });
+}
+// A card's effective column span: inline override → sp* class → full width.
+function spanFromClass(s) {
+  for (const n of [4, 5, 6, 7, 8]) if (s.classList.contains(&quot;sp&quot; + n)) return n;
+  return GRID_COLS;
+}
+function currentSpan(s) {
+  const m = /span\s+(\d+)/.exec(s.style.gridColumn || &quot;&quot;);
+  return m ? +m[1] : spanFromClass(s);
+}
+// Width (px) of one grid column including its gap — to convert drag → columns.
+function gridColumnUnit() {
+  const c = $(&quot;content&quot;);
+  const gap = parseFloat(getComputedStyle(c).columnGap) || 14;
+  return (c.clientWidth - gap * (GRID_COLS - 1)) / GRID_COLS + gap;
 }
 function persistCardOrder() {
   state.cardOrder = cardSections().map((s) => s.dataset.card);
@@ -1961,8 +2000,11 @@ function toggleCardHidden(key) {
 function resetLayout() {
   state.cardOrder = DEFAULT_CARD_ORDER.slice();
   state.cardHidden = [];
+  state.cardSpans = {};
   localStorage.setItem(&quot;cardOrder&quot;, JSON.stringify(state.cardOrder));
   localStorage.setItem(&quot;cardHidden&quot;, &quot;[]&quot;);
+  localStorage.removeItem(&quot;cardSpans&quot;);
+  cardSections().forEach((s) => { s.style.gridColumn = &quot;&quot;; });   // drop inline span overrides
   applyCardLayout();
   if (layoutEditing) { removeEditUI(); buildEditUI(); }
 }
@@ -2007,13 +2049,47 @@ function buildEditUI() {
     grip.addEventListener(&quot;dragend&quot;, () => { s.classList.remove(&quot;dragging&quot;); layoutDragKey = null; persistCardOrder(); });
     s.prepend(bar);
     s.classList.toggle(&quot;lay-dim&quot;, state.cardHidden.includes(key));
+    attachResize(s, key);
   });
   c.addEventListener(&quot;dragover&quot;, onLayoutDragOver);
+}
+// Corner handle to resize a card's width by snapping its column span to the grid.
+function attachResize(section, key) {
+  const handle = document.createElement(&quot;div&quot;);
+  handle.className = &quot;card-resize&quot;;
+  handle.title = &quot;Drag to resize width&quot;;
+  section.appendChild(handle);
+  let startX = 0, startSpan = 0, label = null;
+  const onMove = (e) => {
+    const n = Math.max(MIN_SPAN, Math.min(GRID_COLS,
+      Math.round(startSpan + (e.clientX - startX) / gridColumnUnit())));
+    section.style.gridColumn = `span ${n}`;
+    if (label) label.textContent = `${n} / ${GRID_COLS}`;
+  };
+  const onUp = () => {
+    document.removeEventListener(&quot;pointermove&quot;, onMove);
+    document.removeEventListener(&quot;pointerup&quot;, onUp);
+    label?.remove(); label = null;
+    state.cardSpans[key] = currentSpan(section);
+    localStorage.setItem(&quot;cardSpans&quot;, JSON.stringify(state.cardSpans));
+    window.dispatchEvent(new Event(&quot;resize&quot;));   // reflow Chart.js canvases + Leaflet map
+  };
+  handle.addEventListener(&quot;pointerdown&quot;, (e) => {
+    e.preventDefault(); e.stopPropagation();
+    startX = e.clientX; startSpan = currentSpan(section);
+    label = document.createElement(&quot;div&quot;);
+    label.className = &quot;card-resize-label&quot;;
+    label.textContent = `${startSpan} / ${GRID_COLS}`;
+    section.appendChild(label);
+    document.addEventListener(&quot;pointermove&quot;, onMove);
+    document.addEventListener(&quot;pointerup&quot;, onUp);
+  });
 }
 function removeEditUI() {
   const c = $(&quot;content&quot;);
   c.removeEventListener(&quot;dragover&quot;, onLayoutDragOver);
-  c.querySelectorAll(&quot;:scope > section > .card-edit&quot;).forEach((b) => b.remove());
+  c.querySelectorAll(&quot;:scope > section > .card-edit, :scope > section > .card-resize, :scope > section > .card-resize-label&quot;)
+    .forEach((b) => b.remove());
   cardSections().forEach((s) => s.classList.remove(&quot;lay-dim&quot;, &quot;dragging&quot;));
 }
 function onLayoutDragOver(e) {
@@ -2034,7 +2110,7 @@ function showLayoutBar() {
   let bar = $(&quot;layoutBar&quot;);
   if (!bar) { bar = document.createElement(&quot;div&quot;); bar.id = &quot;layoutBar&quot;; bar.className = &quot;layout-bar&quot;; document.body.appendChild(bar); }
   bar.innerHTML =
-    `<span class=&quot;lb-hint&quot;>✦ Editing layout — drag <b>⠿</b> or use ↑ ↓, tap Hide</span>` +
+    `<span class=&quot;lb-hint&quot;>✦ Editing layout — reorder (⠿ / ↑ ↓), resize from the corner ◢, Hide</span>` +
     `<button class=&quot;btn&quot; id=&quot;layoutReset&quot;>Reset</button>` +
     `<button class=&quot;btn lb-done&quot; id=&quot;layoutDone&quot;>Done</button>`;
   $(&quot;layoutDone&quot;).onclick = exitLayoutEdit;
