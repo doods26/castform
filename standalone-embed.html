@@ -587,6 +587,38 @@ body.settings-open { overflow: hidden; }
 .life-bar { height: 5px; border-radius: 3px; background: rgba(255,255,255,0.1); overflow: hidden; margin: 8px 0 6px; }
 .life-bar i { display: block; height: 100%; border-radius: 3px; }
 .life-reason { font-size: 0.74rem; color: var(--muted); }
+/* Customizable layout (hide + reorder cards) ------------------------------ */
+.lay-hidden { display: none; }
+.card-edit { display: none; }
+body.editing-layout .card-edit {
+  display: flex; align-items: center; gap: 8px; margin: -2px 0 14px;
+  padding: 8px 10px; border-radius: 10px;
+  background: rgba(111,183,255,0.14); border: 1px dashed rgba(111,183,255,0.55);
+}
+body.editing-layout section[data-card] { outline: 1px dashed rgba(111,183,255,0.30); outline-offset: 3px; }
+body.editing-layout .lay-hidden { display: block; }      /* reveal hidden cards so they can be restored */
+body.editing-layout section[data-card].lay-dim { opacity: 0.5; }
+.ce-grip { cursor: grab; color: var(--muted); font-size: 1.15rem; line-height: 1; touch-action: none; }
+.ce-grip:active { cursor: grabbing; }
+.ce-name { font-weight: 700; font-size: 0.82rem; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ce-btn { padding: 4px 10px; border-radius: 8px; border: 1px solid var(--stroke); background: var(--glass); color: var(--text); cursor: pointer; font-size: 0.78rem; }
+.ce-btn:hover { background: var(--glass-strong); }
+.ce-hide { min-width: 52px; }
+section[data-card].dragging { opacity: 0.55; }
+.layout-bar {
+  position: fixed; left: 50%; bottom: 0; z-index: 1200;
+  transform: translateX(-50%) translateY(130%); transition: transform 0.3s ease;
+  display: flex; align-items: center; gap: 12px; max-width: 94vw;
+  padding: 12px 16px; padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  border-radius: 16px 16px 0 0; background: rgba(20,28,48,0.97);
+  border: 1px solid var(--stroke); box-shadow: var(--shadow); backdrop-filter: blur(12px);
+}
+.layout-bar.show { transform: translateX(-50%) translateY(0); }
+.layout-bar .lb-hint { font-size: 0.78rem; color: var(--muted); }
+.layout-bar .lb-hint b { color: var(--text); }
+.layout-bar .lb-done { background: var(--accent); color: #06203f; font-weight: 700; }
+@media (max-width: 520px) { .layout-bar .lb-hint { display: none; } }
+.reduce-motion .layout-bar { transition: none; }
 /* Prayer times card ------------------------------------------------------- */
 .pray-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; margin-bottom: 14px; }
 .pray-title { display: flex; align-items: center; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 1.4px; color: var(--muted); font-weight: 700; }
@@ -795,14 +827,14 @@ body.settings-open { overflow: hidden; }
     </div>
     <main id=&quot;content&quot; class=&quot;grid hidden&quot;>
       <!-- Hero: current conditions -->
-      <section class=&quot;card current sp5&quot; id=&quot;currentCard&quot;></section>
+      <section class=&quot;card current sp5&quot; id=&quot;currentCard&quot; data-card=&quot;current&quot;></section>
       <!-- Conditions console: gauges -->
-      <section class=&quot;card sp7 cond-card&quot;>
+      <section class=&quot;card sp7 cond-card&quot; data-card=&quot;conditions&quot;>
         <h2><span class=&quot;h2-ico&quot;>📊</span>Conditions now</h2>
         <div id=&quot;tiles&quot;></div>
       </section>
       <!-- Radar time-lapse -->
-      <section class=&quot;card radar-card sp7&quot;>
+      <section class=&quot;card radar-card sp7&quot; data-card=&quot;radar&quot;>
         <div class=&quot;radar-head&quot;>
           <h2><span class=&quot;h2-ico&quot;>📡</span>Radar · storms moving in</h2>
           <div class=&quot;radar-head-right&quot;>
@@ -832,18 +864,18 @@ body.settings-open { overflow: hidden; }
         </div>
       </section>
       <!-- Hourly -->
-      <section class=&quot;card hourly-wrap sp5&quot;>
+      <section class=&quot;card hourly-wrap sp5&quot; data-card=&quot;hourly&quot;>
         <h2><span class=&quot;h2-ico&quot;>📈</span>Next 48 hours</h2>
         <div class=&quot;chart-box&quot;><canvas id=&quot;hourlyChart&quot;></canvas></div>
         <div class=&quot;hour-strip&quot; id=&quot;hourStrip&quot;></div>
       </section>
       <!-- Daily -->
-      <section class=&quot;card sp6&quot;>
+      <section class=&quot;card sp6&quot; data-card=&quot;daily&quot;>
         <h2><span class=&quot;h2-ico&quot;>🗓️</span>7-day forecast</h2>
         <div class=&quot;days&quot; id=&quot;days&quot;></div>
       </section>
       <!-- Historical reference -->
-      <section class=&quot;card history-card sp6&quot;>
+      <section class=&quot;card history-card sp6&quot; data-card=&quot;history&quot;>
         <div class=&quot;radar-head&quot;>
           <h2><span class=&quot;h2-ico&quot;>📅</span>Historical reference · this date</h2>
           <div class=&quot;radar-frame-label&quot; id=&quot;historySub&quot;></div>
@@ -854,21 +886,21 @@ body.settings-open { overflow: hidden; }
         <div class=&quot;history-note&quot;>Last 35 days of daily highs &amp;amp; lows vs the climate normal band. Normals &amp;amp; records from ~10 years of ERA5 reanalysis.</div>
       </section>
       <!-- Marine (coastal locations only) -->
-      <section class=&quot;card marine-card hidden sp6&quot; id=&quot;marineCard&quot;>
+      <section class=&quot;card marine-card hidden sp6&quot; id=&quot;marineCard&quot; data-card=&quot;marine&quot;>
         <h2>🌊 Marine &amp;amp; surf</h2>
         <div class=&quot;tiles&quot; id=&quot;marineBody&quot;></div>
       </section>
       <!-- Air quality + Sun -->
-      <section class=&quot;card sp6&quot; id=&quot;aqiCard&quot;><h2><span class=&quot;h2-ico&quot;>🍃</span>Air quality</h2><div id=&quot;aqiBody&quot;></div></section>
-      <section class=&quot;card sp6&quot; id=&quot;sunSection&quot;><h2><span class=&quot;h2-ico&quot;>🌅</span>Sun &amp;amp; daylight</h2><div class=&quot;sun-card&quot; id=&quot;sunCard&quot;></div></section>
-      <section class=&quot;card sp6 hidden&quot; id=&quot;praySection&quot;><div id=&quot;prayerCard&quot;></div></section>
+      <section class=&quot;card sp6&quot; id=&quot;aqiCard&quot; data-card=&quot;aqi&quot;><h2><span class=&quot;h2-ico&quot;>🍃</span>Air quality</h2><div id=&quot;aqiBody&quot;></div></section>
+      <section class=&quot;card sp6&quot; id=&quot;sunSection&quot; data-card=&quot;sun&quot;><h2><span class=&quot;h2-ico&quot;>🌅</span>Sun &amp;amp; daylight</h2><div class=&quot;sun-card&quot; id=&quot;sunCard&quot;></div></section>
+      <section class=&quot;card sp6 hidden&quot; id=&quot;praySection&quot; data-card=&quot;prayer&quot;><div id=&quot;prayerCard&quot;></div></section>
       <!-- Lifestyle / activity indices -->
-      <section class=&quot;card sp6&quot; id=&quot;lifestyleCard&quot;>
+      <section class=&quot;card sp6&quot; id=&quot;lifestyleCard&quot; data-card=&quot;lifestyle&quot;>
         <h2><span class=&quot;h2-ico&quot;>🎯</span>Good day for…</h2>
         <div class=&quot;life-grid&quot; id=&quot;lifestyleBody&quot;></div>
       </section>
       <!-- Compare two cities -->
-      <section class=&quot;card compare-card&quot;>
+      <section class=&quot;card compare-card&quot; data-card=&quot;compare&quot;>
         <div class=&quot;radar-head&quot;>
           <h2><span class=&quot;h2-ico&quot;>🆚</span>Compare with another city</h2>
           <div class=&quot;search compare-search&quot;>
@@ -1725,6 +1757,17 @@ const state = {
   accent: localStorage.getItem(&quot;accent&quot;) || &quot;&quot;,                  // &quot;&quot; = default
   prayer: localStorage.getItem(&quot;prayerTimes&quot;) === &quot;1&quot;,           // show prayer card (replaces Sun)
   prayerOpen: localStorage.getItem(&quot;prayerOpen&quot;) === &quot;1&quot;,        // prayer card expanded?
+  cardOrder: JSON.parse(localStorage.getItem(&quot;cardOrder&quot;) || &quot;null&quot;),  // custom card order (keys) or null
+  cardHidden: JSON.parse(localStorage.getItem(&quot;cardHidden&quot;) || &quot;[]&quot;),  // hidden card keys
+};
+// Default dashboard order + friendly labels (used by the layout editor).
+const DEFAULT_CARD_ORDER = [&quot;current&quot;, &quot;conditions&quot;, &quot;radar&quot;, &quot;hourly&quot;, &quot;daily&quot;,
+  &quot;history&quot;, &quot;marine&quot;, &quot;aqi&quot;, &quot;sun&quot;, &quot;prayer&quot;, &quot;lifestyle&quot;, &quot;compare&quot;];
+const CARD_LABELS = {
+  current: &quot;Current conditions&quot;, conditions: &quot;Conditions now&quot;, radar: &quot;Radar&quot;,
+  hourly: &quot;Next 48 hours&quot;, daily: &quot;7-day forecast&quot;, history: &quot;Historical reference&quot;,
+  marine: &quot;Marine &amp; surf&quot;, aqi: &quot;Air quality&quot;, sun: &quot;Sun &amp; daylight&quot;,
+  prayer: &quot;Prayer times&quot;, lifestyle: &quot;Good day for…&quot;, compare: &quot;Compare cities&quot;,
 };
 const ACCENTS = [&quot;#6fb7ff&quot;, &quot;#54d6c2&quot;, &quot;#a3e635&quot;, &quot;#ffd45e&quot;, &quot;#ff8a5f&quot;, &quot;#c08cff&quot;];
 // Language: localizes place names (geocoding) and date/time/number formatting.
@@ -1815,6 +1858,7 @@ function boot() {
   wireFullscreen($(&quot;fullscreenBtn&quot;));
   buildStars();
   renderFavorites();
+  applyCardLayout();
   scheduleRefresh();
   // Load the startup default if the user pinned one, else the last place,
   // else a sensible fallback. We intentionally do NOT auto-prompt geolocation.
@@ -1865,6 +1909,137 @@ function setupInstall() {
     deferredInstall = null;
     btn.classList.add(&quot;hidden&quot;);
   };
+}
+// --- Customizable dashboard layout (hide + reorder cards) ------------------
+// Each top-level card carries data-card=&quot;key&quot;. Order + hidden set persist in
+// localStorage. `.lay-hidden` (layout) composes with `.hidden` (feature gates
+// like marine/prayer) — a card shows only when neither applies.
+function cardSections() {
+  const c = $(&quot;content&quot;);
+  return c ? [...c.querySelectorAll(&quot;:scope > section[data-card]&quot;)] : [];
+}
+function applyCardLayout() {
+  const c = $(&quot;content&quot;);
+  if (!c) return;
+  const byKey = {};
+  cardSections().forEach((s) => { byKey[s.dataset.card] = s; });
+  const order = [];
+  (state.cardOrder || []).forEach((k) => { if (byKey[k] &amp;&amp; !order.includes(k)) order.push(k); });
+  // Append any cards missing from the saved order (e.g. newly added features).
+  Object.keys(byKey).forEach((k) => { if (!order.includes(k)) order.push(k); });
+  const foot = c.querySelector(&quot;:scope > .foot&quot;);
+  order.forEach((k) => c.insertBefore(byKey[k], foot || null));
+  const hidden = new Set(state.cardHidden);
+  Object.entries(byKey).forEach(([k, s]) => s.classList.toggle(&quot;lay-hidden&quot;, hidden.has(k)));
+}
+function persistCardOrder() {
+  state.cardOrder = cardSections().map((s) => s.dataset.card);
+  localStorage.setItem(&quot;cardOrder&quot;, JSON.stringify(state.cardOrder));
+}
+function moveCard(key, dir) {
+  const c = $(&quot;content&quot;);
+  const s = c.querySelector(`:scope > section[data-card=&quot;${key}&quot;]`);
+  if (!s) return;
+  const sel = &quot;section[data-card]&quot;;
+  if (dir < 0) {
+    let p = s.previousElementSibling; while (p &amp;&amp; !p.matches(sel)) p = p.previousElementSibling;
+    if (p) c.insertBefore(s, p);
+  } else {
+    let n = s.nextElementSibling; while (n &amp;&amp; !n.matches(sel)) n = n.nextElementSibling;
+    if (n) c.insertBefore(n, s);
+  }
+  persistCardOrder();
+}
+function toggleCardHidden(key) {
+  const set = new Set(state.cardHidden);
+  set.has(key) ? set.delete(key) : set.add(key);
+  state.cardHidden = [...set];
+  localStorage.setItem(&quot;cardHidden&quot;, JSON.stringify(state.cardHidden));
+  $(&quot;content&quot;).querySelector(`:scope > section[data-card=&quot;${key}&quot;]`)
+    ?.classList.toggle(&quot;lay-hidden&quot;, set.has(key));
+}
+function resetLayout() {
+  state.cardOrder = DEFAULT_CARD_ORDER.slice();
+  state.cardHidden = [];
+  localStorage.setItem(&quot;cardOrder&quot;, JSON.stringify(state.cardOrder));
+  localStorage.setItem(&quot;cardHidden&quot;, &quot;[]&quot;);
+  applyCardLayout();
+  if (layoutEditing) { removeEditUI(); buildEditUI(); }
+}
+let layoutEditing = false;
+let layoutDragKey = null;
+function enterLayoutEdit() {
+  layoutEditing = true;
+  document.body.classList.add(&quot;editing-layout&quot;);
+  buildEditUI();
+  showLayoutBar();
+  window.scrollTo({ top: 0, behavior: &quot;smooth&quot; });
+}
+function exitLayoutEdit() {
+  layoutEditing = false;
+  document.body.classList.remove(&quot;editing-layout&quot;);
+  removeEditUI();
+  $(&quot;layoutBar&quot;)?.classList.remove(&quot;show&quot;);
+}
+function buildEditUI() {
+  const c = $(&quot;content&quot;);
+  cardSections().forEach((s) => {
+    if (s.classList.contains(&quot;hidden&quot;)) return;           // feature-gated off → not editable now
+    if (s.querySelector(&quot;:scope > .card-edit&quot;)) return;
+    const key = s.dataset.card;
+    const bar = document.createElement(&quot;div&quot;);
+    bar.className = &quot;card-edit&quot;;
+    bar.innerHTML =
+      `<span class=&quot;ce-grip&quot; draggable=&quot;true&quot; title=&quot;Drag to reorder&quot;>⠿</span>` +
+      `<span class=&quot;ce-name&quot;>${CARD_LABELS[key] || key}</span>` +
+      `<button class=&quot;ce-btn&quot; data-mv=&quot;up&quot; title=&quot;Move up&quot;>↑</button>` +
+      `<button class=&quot;ce-btn&quot; data-mv=&quot;down&quot; title=&quot;Move down&quot;>↓</button>` +
+      `<button class=&quot;ce-btn ce-hide&quot; data-hide>${state.cardHidden.includes(key) ? &quot;Show&quot; : &quot;Hide&quot;}</button>`;
+    bar.querySelector('[data-mv=&quot;up&quot;]').onclick = () => moveCard(key, -1);
+    bar.querySelector('[data-mv=&quot;down&quot;]').onclick = () => moveCard(key, 1);
+    bar.querySelector(&quot;[data-hide]&quot;).onclick = (e) => {
+      toggleCardHidden(key);
+      e.currentTarget.textContent = state.cardHidden.includes(key) ? &quot;Show&quot; : &quot;Hide&quot;;
+      s.classList.toggle(&quot;lay-dim&quot;, state.cardHidden.includes(key));
+    };
+    const grip = bar.querySelector(&quot;.ce-grip&quot;);
+    grip.addEventListener(&quot;dragstart&quot;, () => { layoutDragKey = key; s.classList.add(&quot;dragging&quot;); });
+    grip.addEventListener(&quot;dragend&quot;, () => { s.classList.remove(&quot;dragging&quot;); layoutDragKey = null; persistCardOrder(); });
+    s.prepend(bar);
+    s.classList.toggle(&quot;lay-dim&quot;, state.cardHidden.includes(key));
+  });
+  c.addEventListener(&quot;dragover&quot;, onLayoutDragOver);
+}
+function removeEditUI() {
+  const c = $(&quot;content&quot;);
+  c.removeEventListener(&quot;dragover&quot;, onLayoutDragOver);
+  c.querySelectorAll(&quot;:scope > section > .card-edit&quot;).forEach((b) => b.remove());
+  cardSections().forEach((s) => s.classList.remove(&quot;lay-dim&quot;, &quot;dragging&quot;));
+}
+function onLayoutDragOver(e) {
+  if (!layoutEditing || !layoutDragKey) return;
+  e.preventDefault();
+  const c = $(&quot;content&quot;);
+  const dragging = c.querySelector(&quot;section.dragging&quot;);
+  if (!dragging) return;
+  const others = cardSections().filter((s) => s !== dragging);
+  const after = others.find((s) => {
+    const r = s.getBoundingClientRect();
+    return e.clientY < r.top + r.height / 2;
+  });
+  if (after) c.insertBefore(dragging, after);
+  else c.insertBefore(dragging, c.querySelector(&quot;:scope > .foot&quot;) || null);
+}
+function showLayoutBar() {
+  let bar = $(&quot;layoutBar&quot;);
+  if (!bar) { bar = document.createElement(&quot;div&quot;); bar.id = &quot;layoutBar&quot;; bar.className = &quot;layout-bar&quot;; document.body.appendChild(bar); }
+  bar.innerHTML =
+    `<span class=&quot;lb-hint&quot;>✦ Editing layout — drag <b>⠿</b> or use ↑ ↓, tap Hide</span>` +
+    `<button class=&quot;btn&quot; id=&quot;layoutReset&quot;>Reset</button>` +
+    `<button class=&quot;btn lb-done&quot; id=&quot;layoutDone&quot;>Done</button>`;
+  $(&quot;layoutDone&quot;).onclick = exitLayoutEdit;
+  $(&quot;layoutReset&quot;).onclick = resetLayout;
+  requestAnimationFrame(() => bar.classList.add(&quot;show&quot;));
 }
 function setUnits(u) {
   if (u === state.units) return;
@@ -3290,6 +3465,8 @@ function renderSettings() {
       <button class=&quot;set-toggle ${state.prayer ? &quot;on&quot; : &quot;&quot;}&quot; data-toggle=&quot;prayer&quot; aria-pressed=&quot;${state.prayer}&quot;><span></span></button></div>
     <div class=&quot;set-row&quot;><label>Reduce motion<span class=&quot;set-hint&quot;>Calmer — fewer animations</span></label>
       <button class=&quot;set-toggle ${state.reduceMotion ? &quot;on&quot; : &quot;&quot;}&quot; data-toggle=&quot;reduceMotion&quot; aria-pressed=&quot;${state.reduceMotion}&quot;><span></span></button></div>
+    <div class=&quot;set-row&quot;><label>Dashboard layout<span class=&quot;set-hint&quot;>Hide &amp;amp; reorder cards</span></label>
+      <button class=&quot;btn sm&quot; data-act=&quot;editlayout&quot;>Customize</button></div>
     <div class=&quot;set-row&quot;><label>Startup location<span class=&quot;set-hint&quot;>Opens to ${startup}</span></label>
       <div class=&quot;set-startup&quot;>
         <button class=&quot;btn sm&quot; data-act=&quot;setdefault&quot;>Pin current</button>
@@ -3323,6 +3500,11 @@ function renderSettings() {
     renderSettings();
   });
   act(&quot;cleardefault&quot;, () => { state.defaultPlace = null; localStorage.removeItem(&quot;defaultPlace&quot;); renderSettings(); });
+  act(&quot;editlayout&quot;, () => {
+    $(&quot;settingsOverlay&quot;).classList.add(&quot;hidden&quot;);
+    document.body.classList.remove(&quot;settings-open&quot;);
+    enterLayoutEdit();
+  });
 }
 function setSetting(key, value) {
   if (state[key] === value) return;

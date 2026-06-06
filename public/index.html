@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-title" content="Castform" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="stylesheet" href="/vendor/leaflet.css" />
-  <link rel="stylesheet" href="/css/styles.css?b=9" />
+  <link rel="stylesheet" href="/css/styles.css?b=10" />
   <script src="/js/chart.umd.min.js"></script>
   <script src="/vendor/leaflet.js"></script>
 </head>
@@ -73,16 +73,16 @@
 
     <main id="content" class="grid hidden">
       <!-- Hero: current conditions -->
-      <section class="card current sp5" id="currentCard"></section>
+      <section class="card current sp5" id="currentCard" data-card="current"></section>
 
       <!-- Conditions console: gauges -->
-      <section class="card sp7 cond-card">
+      <section class="card sp7 cond-card" data-card="conditions">
         <h2><span class="h2-ico">📊</span>Conditions now</h2>
         <div id="tiles"></div>
       </section>
 
       <!-- Radar time-lapse -->
-      <section class="card radar-card sp7">
+      <section class="card radar-card sp7" data-card="radar">
         <div class="radar-head">
           <h2><span class="h2-ico">📡</span>Radar · storms moving in</h2>
           <div class="radar-head-right">
@@ -113,20 +113,20 @@
       </section>
 
       <!-- Hourly -->
-      <section class="card hourly-wrap sp5">
+      <section class="card hourly-wrap sp5" data-card="hourly">
         <h2><span class="h2-ico">📈</span>Next 48 hours</h2>
         <div class="chart-box"><canvas id="hourlyChart"></canvas></div>
         <div class="hour-strip" id="hourStrip"></div>
       </section>
 
       <!-- Daily -->
-      <section class="card sp6">
+      <section class="card sp6" data-card="daily">
         <h2><span class="h2-ico">🗓️</span>7-day forecast</h2>
         <div class="days" id="days"></div>
       </section>
 
       <!-- Historical reference -->
-      <section class="card history-card sp6">
+      <section class="card history-card sp6" data-card="history">
         <div class="radar-head">
           <h2><span class="h2-ico">📅</span>Historical reference · this date</h2>
           <div class="radar-frame-label" id="historySub"></div>
@@ -138,24 +138,24 @@
       </section>
 
       <!-- Marine (coastal locations only) -->
-      <section class="card marine-card hidden sp6" id="marineCard">
+      <section class="card marine-card hidden sp6" id="marineCard" data-card="marine">
         <h2>🌊 Marine &amp; surf</h2>
         <div class="tiles" id="marineBody"></div>
       </section>
 
       <!-- Air quality + Sun -->
-      <section class="card sp6" id="aqiCard"><h2><span class="h2-ico">🍃</span>Air quality</h2><div id="aqiBody"></div></section>
-      <section class="card sp6" id="sunSection"><h2><span class="h2-ico">🌅</span>Sun &amp; daylight</h2><div class="sun-card" id="sunCard"></div></section>
-      <section class="card sp6 hidden" id="praySection"><div id="prayerCard"></div></section>
+      <section class="card sp6" id="aqiCard" data-card="aqi"><h2><span class="h2-ico">🍃</span>Air quality</h2><div id="aqiBody"></div></section>
+      <section class="card sp6" id="sunSection" data-card="sun"><h2><span class="h2-ico">🌅</span>Sun &amp; daylight</h2><div class="sun-card" id="sunCard"></div></section>
+      <section class="card sp6 hidden" id="praySection" data-card="prayer"><div id="prayerCard"></div></section>
 
       <!-- Lifestyle / activity indices -->
-      <section class="card sp6" id="lifestyleCard">
+      <section class="card sp6" id="lifestyleCard" data-card="lifestyle">
         <h2><span class="h2-ico">🎯</span>Good day for…</h2>
         <div class="life-grid" id="lifestyleBody"></div>
       </section>
 
       <!-- Compare two cities -->
-      <section class="card compare-card">
+      <section class="card compare-card" data-card="compare">
         <div class="radar-head">
           <h2><span class="h2-ico">🆚</span>Compare with another city</h2>
           <div class="search compare-search">
@@ -170,6 +170,6 @@
     </main>
   </div>
 
-  <script type="module" src="/js/app.js?b=9"></script>
+  <script type="module" src="/js/app.js?b=10"></script>
 </body>
 </html>

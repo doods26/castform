@@ -630,6 +630,40 @@ body.settings-open { overflow: hidden; }
 .life-bar i { display: block; height: 100%; border-radius: 3px; }
 .life-reason { font-size: 0.74rem; color: var(--muted); }
 
+/* Customizable layout (hide + reorder cards) ------------------------------ */
+.lay-hidden { display: none; }
+.card-edit { display: none; }
+body.editing-layout .card-edit {
+  display: flex; align-items: center; gap: 8px; margin: -2px 0 14px;
+  padding: 8px 10px; border-radius: 10px;
+  background: rgba(111,183,255,0.14); border: 1px dashed rgba(111,183,255,0.55);
+}
+body.editing-layout section[data-card] { outline: 1px dashed rgba(111,183,255,0.30); outline-offset: 3px; }
+body.editing-layout .lay-hidden { display: block; }      /* reveal hidden cards so they can be restored */
+body.editing-layout section[data-card].lay-dim { opacity: 0.5; }
+.ce-grip { cursor: grab; color: var(--muted); font-size: 1.15rem; line-height: 1; touch-action: none; }
+.ce-grip:active { cursor: grabbing; }
+.ce-name { font-weight: 700; font-size: 0.82rem; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ce-btn { padding: 4px 10px; border-radius: 8px; border: 1px solid var(--stroke); background: var(--glass); color: var(--text); cursor: pointer; font-size: 0.78rem; }
+.ce-btn:hover { background: var(--glass-strong); }
+.ce-hide { min-width: 52px; }
+section[data-card].dragging { opacity: 0.55; }
+
+.layout-bar {
+  position: fixed; left: 50%; bottom: 0; z-index: 1200;
+  transform: translateX(-50%) translateY(130%); transition: transform 0.3s ease;
+  display: flex; align-items: center; gap: 12px; max-width: 94vw;
+  padding: 12px 16px; padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  border-radius: 16px 16px 0 0; background: rgba(20,28,48,0.97);
+  border: 1px solid var(--stroke); box-shadow: var(--shadow); backdrop-filter: blur(12px);
+}
+.layout-bar.show { transform: translateX(-50%) translateY(0); }
+.layout-bar .lb-hint { font-size: 0.78rem; color: var(--muted); }
+.layout-bar .lb-hint b { color: var(--text); }
+.layout-bar .lb-done { background: var(--accent); color: #06203f; font-weight: 700; }
+@media (max-width: 520px) { .layout-bar .lb-hint { display: none; } }
+.reduce-motion .layout-bar { transition: none; }
+
 /* Prayer times card ------------------------------------------------------- */
 .pray-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; margin-bottom: 14px; }
 .pray-title { display: flex; align-items: center; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 1.4px; color: var(--muted); font-weight: 700; }
