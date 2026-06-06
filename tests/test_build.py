@@ -252,6 +252,39 @@ class PrayerCardTests(unittest.TestCase):
         self.assertIn("js/prayer.js", build)
 
 
+class LayoutEditorTests(unittest.TestCase):
+    """Guard the hide/reorder dashboard-layout editor."""
+
+    EXPECTED_CARDS = {"current", "conditions", "radar", "hourly", "daily", "history",
+                      "marine", "aqi", "sun", "prayer", "lifestyle", "compare"}
+
+    def test_all_cards_keyed(self):
+        html = (PUB / "index.html").read_text(encoding="utf-8")
+        keys = set(re.findall(r'<section[^>]*\bdata-card="([a-z]+)"', html))
+        self.assertEqual(keys, self.EXPECTED_CARDS,
+                         "every #content card must carry a stable data-card key")
+
+    def test_app_wires_layout_editor(self):
+        js = (PUB / "js" / "app.js").read_text(encoding="utf-8")
+        for fn in ("function applyCardLayout", "function moveCard",
+                   "function toggleCardHidden", "function enterLayoutEdit",
+                   "function resetLayout"):
+            self.assertIn(fn, js, f"app.js missing {fn}")
+        self.assertIn("applyCardLayout()", js)            # applied on boot
+        self.assertIn('data-act="editlayout"', js)        # settings entry point
+
+    def test_layout_css_present(self):
+        css = (PUB / "css" / "styles.css").read_text(encoding="utf-8")
+        self.assertRegex(css, r"\.lay-hidden\s*\{[^}]*display:\s*none")
+        self.assertIn("editing-layout", css)
+        self.assertIn(".layout-bar", css)
+
+    def test_layout_in_standalone_bundle(self):
+        bundle = (ROOT / "standalone.html").read_text(encoding="utf-8")
+        self.assertIn('data-card="current"', bundle)
+        self.assertIn("applyCardLayout", bundle)
+
+
 NODE = shutil.which("node")
 
 

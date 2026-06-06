@@ -20,6 +20,17 @@ const state = {
   accent: localStorage.getItem("accent") || "",                  // "" = default
   prayer: localStorage.getItem("prayerTimes") === "1",           // show prayer card (replaces Sun)
   prayerOpen: localStorage.getItem("prayerOpen") === "1",        // prayer card expanded?
+  cardOrder: JSON.parse(localStorage.getItem("cardOrder") || "null"),  // custom card order (keys) or null
+  cardHidden: JSON.parse(localStorage.getItem("cardHidden") || "[]"),  // hidden card keys
+};
+// Default dashboard order + friendly labels (used by the layout editor).
+const DEFAULT_CARD_ORDER = ["current", "conditions", "radar", "hourly", "daily",
+  "history", "marine", "aqi", "sun", "prayer", "lifestyle", "compare"];
+const CARD_LABELS = {
+  current: "Current conditions", conditions: "Conditions now", radar: "Radar",
+  hourly: "Next 48 hours", daily: "7-day forecast", history: "Historical reference",
+  marine: "Marine & surf", aqi: "Air quality", sun: "Sun & daylight",
+  prayer: "Prayer times", lifestyle: "Good day for…", compare: "Compare cities",
 };
 const ACCENTS = ["#6fb7ff", "#54d6c2", "#a3e635", "#ffd45e", "#ff8a5f", "#c08cff"];
 // Language: localizes place names (geocoding) and date/time/number formatting.
@@ -116,6 +127,7 @@ function boot() {
   wireFullscreen($("fullscreenBtn"));
   buildStars();
   renderFavorites();
+  applyCardLayout();
   scheduleRefresh();
 
   // Load the startup default if the user pinned one, else the last place,
@@ -171,6 +183,139 @@ function setupInstall() {
     deferredInstall = null;
     btn.classList.add("hidden");
   };
+}
+
+// --- Customizable dashboard layout (hide + reorder cards) ------------------
+// Each top-level card carries data-card="key". Order + hidden set persist in
+// localStorage. `.lay-hidden` (layout) composes with `.hidden` (feature gates
+// like marine/prayer) — a card shows only when neither applies.
+function cardSections() {
+  const c = $("content");
+  return c ? [...c.querySelectorAll(":scope > section[data-card]")] : [];
+}
+function applyCardLayout() {
+  const c = $("content");
+  if (!c) return;
+  const byKey = {};
+  cardSections().forEach((s) => { byKey[s.dataset.card] = s; });
+  const order = [];
+  (state.cardOrder || []).forEach((k) => { if (byKey[k] && !order.includes(k)) order.push(k); });
+  // Append any cards missing from the saved order (e.g. newly added features).
+  Object.keys(byKey).forEach((k) => { if (!order.includes(k)) order.push(k); });
+  const foot = c.querySelector(":scope > .foot");
+  order.forEach((k) => c.insertBefore(byKey[k], foot || null));
+  const hidden = new Set(state.cardHidden);
+  Object.entries(byKey).forEach(([k, s]) => s.classList.toggle("lay-hidden", hidden.has(k)));
+}
+function persistCardOrder() {
+  state.cardOrder = cardSections().map((s) => s.dataset.card);
+  localStorage.setItem("cardOrder", JSON.stringify(state.cardOrder));
+}
+function moveCard(key, dir) {
+  const c = $("content");
+  const s = c.querySelector(`:scope > section[data-card="${key}"]`);
+  if (!s) return;
+  const sel = "section[data-card]";
+  if (dir < 0) {
+    let p = s.previousElementSibling; while (p && !p.matches(sel)) p = p.previousElementSibling;
+    if (p) c.insertBefore(s, p);
+  } else {
+    let n = s.nextElementSibling; while (n && !n.matches(sel)) n = n.nextElementSibling;
+    if (n) c.insertBefore(n, s);
+  }
+  persistCardOrder();
+}
+function toggleCardHidden(key) {
+  const set = new Set(state.cardHidden);
+  set.has(key) ? set.delete(key) : set.add(key);
+  state.cardHidden = [...set];
+  localStorage.setItem("cardHidden", JSON.stringify(state.cardHidden));
+  $("content").querySelector(`:scope > section[data-card="${key}"]`)
+    ?.classList.toggle("lay-hidden", set.has(key));
+}
+function resetLayout() {
+  state.cardOrder = DEFAULT_CARD_ORDER.slice();
+  state.cardHidden = [];
+  localStorage.setItem("cardOrder", JSON.stringify(state.cardOrder));
+  localStorage.setItem("cardHidden", "[]");
+  applyCardLayout();
+  if (layoutEditing) { removeEditUI(); buildEditUI(); }
+}
+
+let layoutEditing = false;
+let layoutDragKey = null;
+function enterLayoutEdit() {
+  layoutEditing = true;
+  document.body.classList.add("editing-layout");
+  buildEditUI();
+  showLayoutBar();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function exitLayoutEdit() {
+  layoutEditing = false;
+  document.body.classList.remove("editing-layout");
+  removeEditUI();
+  $("layoutBar")?.classList.remove("show");
+}
+function buildEditUI() {
+  const c = $("content");
+  cardSections().forEach((s) => {
+    if (s.classList.contains("hidden")) return;           // feature-gated off → not editable now
+    if (s.querySelector(":scope > .card-edit")) return;
+    const key = s.dataset.card;
+    const bar = document.createElement("div");
+    bar.className = "card-edit";
+    bar.innerHTML =
+      `<span class="ce-grip" draggable="true" title="Drag to reorder">⠿</span>` +
+      `<span class="ce-name">${CARD_LABELS[key] || key}</span>` +
+      `<button class="ce-btn" data-mv="up" title="Move up">↑</button>` +
+      `<button class="ce-btn" data-mv="down" title="Move down">↓</button>` +
+      `<button class="ce-btn ce-hide" data-hide>${state.cardHidden.includes(key) ? "Show" : "Hide"}</button>`;
+    bar.querySelector('[data-mv="up"]').onclick = () => moveCard(key, -1);
+    bar.querySelector('[data-mv="down"]').onclick = () => moveCard(key, 1);
+    bar.querySelector("[data-hide]").onclick = (e) => {
+      toggleCardHidden(key);
+      e.currentTarget.textContent = state.cardHidden.includes(key) ? "Show" : "Hide";
+      s.classList.toggle("lay-dim", state.cardHidden.includes(key));
+    };
+    const grip = bar.querySelector(".ce-grip");
+    grip.addEventListener("dragstart", () => { layoutDragKey = key; s.classList.add("dragging"); });
+    grip.addEventListener("dragend", () => { s.classList.remove("dragging"); layoutDragKey = null; persistCardOrder(); });
+    s.prepend(bar);
+    s.classList.toggle("lay-dim", state.cardHidden.includes(key));
+  });
+  c.addEventListener("dragover", onLayoutDragOver);
+}
+function removeEditUI() {
+  const c = $("content");
+  c.removeEventListener("dragover", onLayoutDragOver);
+  c.querySelectorAll(":scope > section > .card-edit").forEach((b) => b.remove());
+  cardSections().forEach((s) => s.classList.remove("lay-dim", "dragging"));
+}
+function onLayoutDragOver(e) {
+  if (!layoutEditing || !layoutDragKey) return;
+  e.preventDefault();
+  const c = $("content");
+  const dragging = c.querySelector("section.dragging");
+  if (!dragging) return;
+  const others = cardSections().filter((s) => s !== dragging);
+  const after = others.find((s) => {
+    const r = s.getBoundingClientRect();
+    return e.clientY < r.top + r.height / 2;
+  });
+  if (after) c.insertBefore(dragging, after);
+  else c.insertBefore(dragging, c.querySelector(":scope > .foot") || null);
+}
+function showLayoutBar() {
+  let bar = $("layoutBar");
+  if (!bar) { bar = document.createElement("div"); bar.id = "layoutBar"; bar.className = "layout-bar"; document.body.appendChild(bar); }
+  bar.innerHTML =
+    `<span class="lb-hint">✦ Editing layout — drag <b>⠿</b> or use ↑ ↓, tap Hide</span>` +
+    `<button class="btn" id="layoutReset">Reset</button>` +
+    `<button class="btn lb-done" id="layoutDone">Done</button>`;
+  $("layoutDone").onclick = exitLayoutEdit;
+  $("layoutReset").onclick = resetLayout;
+  requestAnimationFrame(() => bar.classList.add("show"));
 }
 
 function setUnits(u) {
@@ -1698,6 +1843,8 @@ function renderSettings() {
       <button class="set-toggle ${state.prayer ? "on" : ""}" data-toggle="prayer" aria-pressed="${state.prayer}"><span></span></button></div>
     <div class="set-row"><label>Reduce motion<span class="set-hint">Calmer — fewer animations</span></label>
       <button class="set-toggle ${state.reduceMotion ? "on" : ""}" data-toggle="reduceMotion" aria-pressed="${state.reduceMotion}"><span></span></button></div>
+    <div class="set-row"><label>Dashboard layout<span class="set-hint">Hide &amp; reorder cards</span></label>
+      <button class="btn sm" data-act="editlayout">Customize</button></div>
     <div class="set-row"><label>Startup location<span class="set-hint">Opens to ${startup}</span></label>
       <div class="set-startup">
         <button class="btn sm" data-act="setdefault">Pin current</button>
@@ -1732,6 +1879,11 @@ function renderSettings() {
     renderSettings();
   });
   act("cleardefault", () => { state.defaultPlace = null; localStorage.removeItem("defaultPlace"); renderSettings(); });
+  act("editlayout", () => {
+    $("settingsOverlay").classList.add("hidden");
+    document.body.classList.remove("settings-open");
+    enterLayoutEdit();
+  });
 }
 
 function setSetting(key, value) {
