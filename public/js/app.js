@@ -523,29 +523,43 @@ function setupSearch() {
 // --- Geolocation ----------------------------------------------------------
 function useMyLocation() {
   // Browsers block geolocation on insecure (plain http, non-localhost) origins —
-  // e.g. when viewing over the LAN on a phone. Guide the user to search instead.
+  // e.g. when viewing over the LAN on a phone. The installed PWA is served over
+  // HTTPS (GitHub Pages), so this guard only trips on the dev box over the LAN.
   if (!window.isSecureContext && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
+    toast("Location needs HTTPS — search your city instead", 3200);
     $("searchInput").focus();
-    $("searchInput").placeholder = "Location needs HTTPS — search your city here ↵";
+    $("searchInput").placeholder = "Search your city ↵";
     return;
   }
-  if (!navigator.geolocation) return loadWeather(state.place || fallbackPlace());
-  setLoading("Finding your location…");
+  if (!navigator.geolocation) { toast("This device can't share its location"); return; }
+  const btn = $("geoBtn");
+  btn?.classList.add("locating");
+  toast("Finding your location…", 15000);
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
+      btn?.classList.remove("locating");
       const { latitude: lat, longitude: lon } = pos.coords;
       let info = {};
       try {
         const r = await fetch(`/api/reverse?lat=${lat}&lon=${lon}&lang=${effLang2()}`);
         info = await r.json();
-      } catch (e) { /* ignore */ }
+      } catch (e) { /* name is optional — fall back to "My location" */ }
       loadWeather({
         name: info.name || "My location", admin1: info.admin1,
         country: info.country, country_code: info.country_code, lat, lon,
       });
     },
-    () => loadWeather(state.place || fallbackPlace()),
-    { timeout: 8000 }
+    (err) => {
+      // Don't silently strand the user — say what happened so the pin feels alive.
+      btn?.classList.remove("locating");
+      const msg = err.code === err.PERMISSION_DENIED
+        ? "Location blocked — allow it in your device settings, or search your city"
+        : err.code === err.TIMEOUT
+        ? "Couldn't get a location fix in time — try again"
+        : "Location unavailable — search your city instead";
+      toast(msg, 3600);
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
   );
 }
 
@@ -2132,12 +2146,18 @@ function maybeNotify(place, f, alerts) {
 }
 
 // --- Auto-refresh ---------------------------------------------------------
-function pulseUpdated() {
+// Brief, self-dismissing status message (reuses the "Updated" pill).
+function toast(msg, ms = 2600) {
   const t = $("updateToast");
   if (!t) return;
-  t.textContent = `Updated ${clk(new Date())}`;
+  t.textContent = msg;
   t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 2200);
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove("show"), ms);
+}
+
+function pulseUpdated() {
+  toast(`Updated ${clk(new Date())}`, 2200);
 }
 
 function scheduleRefresh() {
