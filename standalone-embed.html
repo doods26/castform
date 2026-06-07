@@ -385,6 +385,12 @@ body.settings-open { overflow: hidden; }
 /* Toolbar extras, favorites, comfort, marine, compare, effects ------------ */
 .icon-btn { min-width: 42px; justify-content: center; font-size: 1.05rem; }
 #starBtn.active { color: #ffd45e; border-color: rgba(255,212,94,0.5); }
+/* Manual refresh button — spins its icon while a refresh is in flight */
+.ref-ico { display: inline-block; line-height: 1; }
+#refreshBtn.spinning { pointer-events: none; opacity: 0.85; }
+#refreshBtn.spinning .ref-ico { animation: refspin 0.8s linear infinite; }
+@keyframes refspin { to { transform: rotate(360deg); } }
+.reduce-motion #refreshBtn.spinning .ref-ico { animation: none; }
 #notifyBtn.active { color: #7ed957; border-color: rgba(126,217,87,0.45); }
 .fav-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .fav-bar.hidden { display: none; }
@@ -818,6 +824,7 @@ body.editing-layout .card-resize:hover { opacity: 1; }
         <div class=&quot;results&quot; id=&quot;searchResults&quot;></div>
       </div>
       <div class=&quot;toolbar&quot;>
+        <button class=&quot;btn icon-btn&quot; id=&quot;refreshBtn&quot; title=&quot;Refresh now&quot; aria-label=&quot;Refresh weather&quot;><span class=&quot;ref-ico&quot;>⟳</span></button>
         <button class=&quot;btn icon-btn&quot; id=&quot;starBtn&quot; title=&quot;Save this location&quot;>☆</button>
         <button class=&quot;btn&quot; id=&quot;geoBtn&quot; title=&quot;Use my location&quot;>📍</button>
         <button class=&quot;btn&quot; id=&quot;notifyBtn&quot; title=&quot;Weather alerts&quot;>🔕 Alerts</button>
@@ -1865,6 +1872,7 @@ function boot() {
   });
   $(&quot;geoBtn&quot;).onclick = useMyLocation;
   $(&quot;starBtn&quot;).onclick = toggleFavorite;
+  $(&quot;refreshBtn&quot;).onclick = doRefresh;
   setupSearch();
   setupCompare();
   setupNotifications();
@@ -3777,6 +3785,25 @@ function pulseUpdated() {
 function scheduleRefresh() {
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = setInterval(() => { if (state.place &amp;&amp; !document.hidden) loadWeather(state.place, true); }, 10 * 60 * 1000);
+}
+// Manual refresh button. Works identically on the web and in the installed PWA
+// (which has no browser reload). Silently re-pulls the current location so the
+// last-good data stays on screen if the refresh fails, spins the icon for
+// feedback, shows the &quot;Updated&quot; toast, and resets the auto-refresh timer.
+let refreshing = false;
+async function doRefresh() {
+  if (refreshing || !state.place) return;
+  refreshing = true;
+  const btn = $(&quot;refreshBtn&quot;);
+  btn?.classList.add(&quot;spinning&quot;);
+  favCache.clear();                       // re-pull favorite-chip temps too
+  try {
+    await loadWeather(state.place, true);
+    scheduleRefresh();                    // next auto-refresh is a full interval away
+  } finally {
+    refreshing = false;
+    btn?.classList.remove(&quot;spinning&quot;);
+  }
 }
 boot();
 })();

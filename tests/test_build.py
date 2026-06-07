@@ -350,5 +350,25 @@ class PrayerMathTests(unittest.TestCase):
         self.assertIsNotNone(r["isha"])
 
 
+class RefreshButtonTests(unittest.TestCase):
+    """Guard the manual refresh button (works on web + installed PWA)."""
+
+    def test_button_present(self):
+        html = (PUB / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="refreshBtn"', html)
+
+    def test_app_wires_refresh(self):
+        js = (PUB / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('$("refreshBtn").onclick = doRefresh', js)
+        self.assertIn("async function doRefresh", js)
+        # Re-pulls the current place silently (keeps last-good data on failure).
+        self.assertRegex(js, r"loadWeather\(state\.place,\s*true\)")
+
+    def test_refresh_in_standalone_bundle(self):
+        bundle = (ROOT / "standalone.html").read_text(encoding="utf-8")
+        self.assertIn('id="refreshBtn"', bundle)
+        self.assertIn("doRefresh", bundle)
+
+
 if __name__ == "__main__":
     unittest.main()
