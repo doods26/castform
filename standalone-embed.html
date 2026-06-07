@@ -53,8 +53,9 @@ body {
   font-family: system-ui, -apple-system, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, sans-serif;
   color: var(--text);
   background: linear-gradient(160deg, var(--bg-a), var(--bg-b));
-  min-height: 100vh;
-  min-height: 100dvh;            /* dvh tracks iOS Safari's collapsing toolbar */
+  min-height: 100vh;            /* NB: avoid dynamic-viewport-height units here —
+                                   they can resolve to 0 in an iOS standalone PWA
+                                   and collapse the element to nothing */
   overflow-x: hidden;
   transition: background 1.2s ease;
   -webkit-font-smoothing: antialiased;
@@ -655,6 +656,8 @@ body.editing-layout .card-resize:hover { opacity: 1; }
 .pray-summary { display: flex; align-items: stretch; gap: 12px; cursor: pointer; user-select: none; }
 .pray-cell { flex: 1; min-width: 0; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,0.04); border: 1px solid var(--stroke); }
 .pray-cell.next { background: linear-gradient(100deg, rgba(111,183,255,0.20), rgba(111,183,255,0.05)); border-color: rgba(111,183,255,0.40); }
+.pray-cell.now.gap .nm { color: var(--muted); font-size: 1rem; }
+.pray-cell.now.gap .tm { color: var(--faint); }
 .pray-cell .k { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); font-weight: 700; display: flex; align-items: center; gap: 6px; }
 .pray-cell .nm { font-size: 1.12rem; font-weight: 800; margin-top: 5px; display: flex; align-items: baseline; gap: 7px; }
 .pray-cell .nm .ar { font-size: 0.8rem; color: var(--faint); font-weight: 600; }
@@ -707,7 +710,7 @@ body.editing-layout .card-resize:hover { opacity: 1; }
   padding: calc(20px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom));
   animation: fadeIn .2s ease both; }
 .settings-overlay.hidden { display: none; }
-.settings-panel { width: 100%; max-width: 460px; max-height: 88dvh; overflow-y: auto;
+.settings-panel { width: 100%; max-width: 460px; max-height: 88vh; overflow-y: auto;
   /* Contain the scroll so it doesn't chain to the page behind (iOS PWA bug). */
   overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
   background: linear-gradient(180deg, #1a2740, #121b30); border: 1px solid var(--stroke);
@@ -788,7 +791,7 @@ body.editing-layout .card-resize:hover { opacity: 1; }
   /* Settings panel: let rows wrap so segmented controls don't overflow */
   .settings-overlay { align-items: flex-end;
     padding: calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom)); }
-  .settings-panel { max-height: 88dvh; border-radius: 18px; }
+  .settings-panel { max-height: 88vh; border-radius: 18px; }
   .set-row { flex-wrap: wrap; gap: 8px; }
   .set-row > label { flex: 1 1 100%; }
   .set-seg { justify-content: flex-start; }
@@ -1767,10 +1770,60 @@ const COMPASS16 = [&quot;N&quot;, &quot;NNE&quot;, &quot;NE&quot;, &quot;ENE&quo
 function compass16(bearing) {
   return COMPASS16[Math.round(fixAngle(bearing) / 22.5) % 16];
 }
-Object.assign(__NS__, { METHODS, compass16, methodForCountry, prayerTimes, qiblaBearing, qiblaDistanceKm });
+// --- Current / next prayer ----------------------------------------------
+// Pick the current and next of the five daily prayers from their local-clock
+// hours, the current epoch-ms, the LOCATION's local date, and its UTC offset.
+//
+// Two things this gets right:
+//  1. Wrap past midnight — at higher latitudes (and mid-latitudes in summer)
+//     Isha/Fajr land in the small hours, so each prayer's instant is
+//     materialised for yesterday/today/tomorrow and the timeline is sorted.
+//  2. The sunrise gap — Fajr's window ENDS at sunrise. Between sunrise and
+//     Dhuhr no obligatory prayer is active, so we must NOT report &quot;Fajr&quot; then.
+//     `gap: true` flags that window (Now = none, Next = Dhuhr).
+//
+// times: { fajr, dhuhr, asr, maghrib, isha, sunrise } in decimal hours (or null)
+// returns { current, currentAt, next, nextAt, gap, gapFrom }
+const DAILY_ORDER = [&quot;fajr&quot;, &quot;dhuhr&quot;, &quot;asr&quot;, &quot;maghrib&quot;, &quot;isha&quot;];
+function instantAt(date, dayOffset, hours, tzOffset) {
+  return Date.UTC(date.y, date.mo - 1, date.da + dayOffset) + (hours - tzOffset) * 3600000;
+}
+function currentAndNext(times, nowMs, date, tzOffset) {
+  const events = [];
+  for (const dd of [-1, 0, 1]) {
+    for (const key of DAILY_ORDER) {
+      if (times[key] == null) continue;
+      events.push({ key, inst: instantAt(date, dd, times[key], tzOffset) });
+    }
+  }
+  events.sort((a, b) => a.inst - b.inst);
+  const next = events.find((e) => e.inst > nowMs) || null;
+  let current = null;
+  for (const e of events) { if (e.inst <= nowMs) current = e; else break; }
+  // Fajr ends at sunrise → if we're past the sunrise that ends the current
+  // Fajr (and Dhuhr hasn't begun), there's no active prayer: the morning gap.
+  let gap = false, gapFrom = null;
+  if (current &amp;&amp; current.key === &quot;fajr&quot; &amp;&amp; times.sunrise != null) {
+    let sr = null;
+    for (const dd of [-1, 0, 1]) {
+      const s = instantAt(date, dd, times.sunrise, tzOffset);
+      if (s >= current.inst &amp;&amp; (sr == null || s < sr)) sr = s;   // sunrise ending THIS Fajr
+    }
+    if (sr != null &amp;&amp; nowMs >= sr) { gap = true; gapFrom = sr; }
+  }
+  return {
+    current: gap || !current ? null : current.key,
+    currentAt: gap || !current ? null : current.inst,
+    next: next ? next.key : null,
+    nextAt: next ? next.inst : null,
+    gap,
+    gapFrom,
+  };
+}
+Object.assign(__NS__, { METHODS, compass16, currentAndNext, methodForCountry, prayerTimes, qiblaBearing, qiblaDistanceKm });
 })();
 (function(){
-const { describe, icon, compass, initRadar, applyEffects, wireFullscreen, gauge, compassGauge, prayerTimes, qiblaBearing, qiblaDistanceKm, compass16, methodForCountry } = __NS__;
+const { describe, icon, compass, initRadar, applyEffects, wireFullscreen, gauge, compassGauge, prayerTimes, qiblaBearing, qiblaDistanceKm, compass16, methodForCountry, currentAndNext } = __NS__;
 // --- State ----------------------------------------------------------------
 const state = {
   units: localStorage.getItem(&quot;units&quot;) || &quot;imperial&quot;,
@@ -2969,23 +3022,21 @@ function renderPrayer(f) {
   const methodKey = methodForCountry(place.country_code);
   const t = prayerTimes({ year: y, month: mo, day: da, lat: place.lat, lon: place.lon,
     tzOffset, method: methodKey, asr: &quot;standard&quot; });
-  // The five daily prayers (sunrise excluded) → current &amp; next.
-  const order = [&quot;fajr&quot;, &quot;dhuhr&quot;, &quot;asr&quot;, &quot;maghrib&quot;, &quot;isha&quot;];
+  // Current &amp; next prayer. Handles past-midnight wrap AND the sunrise gap:
+  // Fajr ends at sunrise, so between sunrise and Dhuhr there is no active
+  // prayer (cn.current is null / cn.gap is true) — we must not show &quot;Fajr&quot; then.
   const now = Date.now();
+  const cn = currentAndNext(t, now, { y, mo, da }, tzOffset);
+  const curKey = cn.current, nextKey = cn.next, nextAt = cn.nextAt;
+  if (!nextKey) { card.innerHTML = &quot;&quot;; return; }  // polar day/night: no usable times
+  // Per-row &quot;passed&quot; styling still uses today's instants.
   const inst = {};
-  order.forEach((k) => { inst[k] = t[k] == null ? null : prayerInstant(y, mo, da, t[k], tzOffset); });
-  let nextKey = order.find((k) => inst[k] != null &amp;&amp; inst[k] > now);
-  let curKey, nextAt;
-  if (nextKey) {
-    nextAt = inst[nextKey];
-    const idx = order.indexOf(nextKey);
-    curKey = idx > 0 ? order[idx - 1] : &quot;isha&quot;; // before Fajr → still last night's Isha
-  } else {
-    curKey = &quot;isha&quot;; nextKey = &quot;fajr&quot;;          // after Isha → tomorrow's Fajr (~+24h)
-    nextAt = (inst.fajr != null ? inst.fajr : now) + 24 * 3600000;
-  }
+  [&quot;fajr&quot;, &quot;dhuhr&quot;, &quot;asr&quot;, &quot;maghrib&quot;, &quot;isha&quot;].forEach((k) => {
+    inst[k] = t[k] == null ? null : prayerInstant(y, mo, da, t[k], tzOffset);
+  });
   const meta = (k) => PRAYER_META.find((p) => p.key === k);
-  const cur = meta(curKey), nxt = meta(nextKey);
+  const cur = curKey ? meta(curKey) : null;   // null during the sunrise→Dhuhr gap
+  const nxt = meta(nextKey);
   const countdown = fmtPrayerCountdown(nextAt - now);
   const qb = qiblaBearing(place.lat, place.lon);
   const qd = qiblaDistanceKm(place.lat, place.lon);
@@ -3016,7 +3067,9 @@ function renderPrayer(f) {
       <span class=&quot;pray-method&quot;>${t.methodLabel} · auto<br>Standard Asr</span>
     </div>
     <div class=&quot;pray-summary&quot; id=&quot;praySummary&quot;>
-      <div class=&quot;pray-cell now&quot;><div class=&quot;k&quot;>🟢 Now</div><div class=&quot;nm&quot;>${cur.name} <span class=&quot;ar&quot;>${cur.ar}</span></div><div class=&quot;tm&quot;>since ${prayerClock(t[curKey])}</div></div>
+      ${cur
+        ? `<div class=&quot;pray-cell now&quot;><div class=&quot;k&quot;>🟢 Now</div><div class=&quot;nm&quot;>${cur.name} <span class=&quot;ar&quot;>${cur.ar}</span></div><div class=&quot;tm&quot;>since ${prayerClock(t[curKey])}</div></div>`
+        : `<div class=&quot;pray-cell now gap&quot;><div class=&quot;k&quot;>☀️ Now</div><div class=&quot;nm&quot;>No prayer</div><div class=&quot;tm&quot;>Fajr ended at sunrise ${prayerClock(t.sunrise)}</div></div>`}
       <div class=&quot;pray-cell next&quot;><div class=&quot;k&quot;>Up next</div><div class=&quot;nm&quot;>${nxt.name} <span class=&quot;ar&quot;>${nxt.ar}</span></div><div class=&quot;tm&quot;>${prayerClock(t[nextKey])} · in ${countdown}</div></div>
       <div class=&quot;pray-chev&quot;>⌄</div>
     </div>

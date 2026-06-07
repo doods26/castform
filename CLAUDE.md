@@ -21,6 +21,16 @@ This is a hard rule, not a suggestion:
 4. Keep tests **offline and dependency-free** — stdlib `unittest` only, mock the
    network (see `FakeResp` / `mock.patch` usage in `tests/test_server.py`). The
    whole project's value is that it needs no pip installs.
+5. **Test the user journey, not just wiring.** Frontend logic with branches or
+   time/locale edge cases (e.g. the prayer current/next state through a full day,
+   including the sunrise→Dhuhr gap and past-midnight wrap) must be a *pure,
+   exported* function in its module and exercised under Node — see
+   `PrayerJourneyTests` / `PrayerMathTests` in `tests/test_build.py`, which run
+   `node` against the real `.js` (GitHub's runners ship Node). Cover the boundary
+   cases, not only the happy path.
+6. **When you fix a bug, add the regression test that would have caught it** — and
+   if a guard's premise flips (e.g. `dvh` went from "use it" to "never use it,
+   collapses to 0 in the iOS PWA"), invert the test rather than deleting it.
 
 ## Workflow for changes
 
