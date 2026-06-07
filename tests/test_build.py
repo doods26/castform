@@ -198,18 +198,34 @@ class SettingsSheetTests(unittest.TestCase):
         css = (PUB / "css" / "styles.css").read_text(encoding="utf-8")
         self.assertRegex(css, r"body\.settings-open\s*\{[^}]*overflow:\s*hidden")
 
-    def test_panel_scroll_is_contained(self):
-        # overscroll-behavior keeps touch scroll from chaining to the page.
+    def test_settings_scroll_is_contained(self):
+        # overscroll-behavior keeps touch scroll from chaining to the page. The
+        # overlay is now the scroll container, so containment lives there.
         css = (PUB / "css" / "styles.css").read_text(encoding="utf-8")
-        self.assertRegex(css, r"\.settings-panel\s*\{[^}]*overscroll-behavior:\s*contain")
+        self.assertRegex(css, r"\.settings-overlay\s*\{[^}]*overscroll-behavior:\s*contain")
 
-    def test_panel_max_height_uses_vh_not_dvh(self):
-        # REGRESSION: the panel must cap its height with vh, NOT dvh — dvh
-        # collapses to ~0 in the iOS standalone PWA, hiding the whole panel
-        # (only the dimmed backdrop showed). vh keeps it visible everywhere.
+    def test_settings_sheet_cannot_collapse_to_zero(self):
+        # REGRESSION (twice-bitten): the settings sheet kept vanishing in the iOS
+        # standalone PWA — only the dimmed backdrop showed. Root cause: its height
+        # was bounded by a value that resolves to ~0 in that webview (first dvh,
+        # then vh; even max-height:100% shares the failure mode if the parent's
+        # height resolves to 0). The fix removes ALL height bounds from the panel
+        # and makes the OVERLAY the scroll container. The overlay is
+        # position:fixed; inset:0 — pinned to the real viewport, never zero — so:
+        #   1. the panel must NOT bound its height (no max-height at all), and
+        #   2. the overlay must scroll (overflow-y:auto) and stay fixed/inset:0.
         css = (PUB / "css" / "styles.css").read_text(encoding="utf-8")
-        self.assertRegex(css, r"\.settings-panel\s*\{[^}]*max-height:\s*\d+vh\b")
-        self.assertNotRegex(css, r"\.settings-panel\s*\{[^}]*max-height:\s*\d+dvh")
+        for m in re.finditer(r"\.settings-panel\s*\{([^}]*)\}", css):
+            self.assertNotRegex(
+                m.group(1), r"max-height",
+                "the settings panel must not bound its height — let the overlay scroll")
+        overlay = re.search(r"\.settings-overlay\s*\{([^}]*)\}", css)
+        self.assertIsNotNone(overlay, ".settings-overlay rule missing")
+        body = overlay.group(1)
+        self.assertRegex(body, r"position:\s*fixed")
+        self.assertRegex(body, r"inset:\s*0")
+        self.assertRegex(body, r"overflow-y:\s*auto",
+                         "overlay must scroll so a tall panel is reachable")
 
     def test_js_toggles_scroll_lock_class(self):
         js = (PUB / "js" / "app.js").read_text(encoding="utf-8")
