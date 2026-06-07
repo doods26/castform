@@ -25,7 +25,9 @@ on a Raspberry Pi in kiosk mode later. **Zero dependencies** — just Python.
   12-column grid, height is free; Hide/Show), remembered between visits; one-tap Reset restores the
   default. Heights stay content-driven until you change them, and on phones the grid is single-column
   so overrides are ignored — the layout stays clean with no dead space
-- **Auto-refresh** every 10 minutes with an "updated" toast; **fullscreen kiosk** button for wall displays
+- **Manual refresh** button (⟳) that re-pulls the current location on demand — works in the browser
+  and the installed PWA (which has no reload button); plus **auto-refresh** every 10 minutes with an
+  "updated" toast, and a **fullscreen kiosk** button for wall displays
 - **Animated radar time-lapse** — live precipitation radar on a dark map (RainViewer + Leaflet)
   with play/pause, a scrubber, and speed control, so you can watch storms move into the area.
   Includes short-term forecast frames, crossfades, **click-anywhere-to-load** that point's weather,

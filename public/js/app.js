@@ -111,6 +111,7 @@ function boot() {
   });
   $("geoBtn").onclick = useMyLocation;
   $("starBtn").onclick = toggleFavorite;
+  $("refreshBtn").onclick = doRefresh;
   setupSearch();
   setupCompare();
   setupNotifications();
@@ -2142,6 +2143,26 @@ function pulseUpdated() {
 function scheduleRefresh() {
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = setInterval(() => { if (state.place && !document.hidden) loadWeather(state.place, true); }, 10 * 60 * 1000);
+}
+
+// Manual refresh button. Works identically on the web and in the installed PWA
+// (which has no browser reload). Silently re-pulls the current location so the
+// last-good data stays on screen if the refresh fails, spins the icon for
+// feedback, shows the "Updated" toast, and resets the auto-refresh timer.
+let refreshing = false;
+async function doRefresh() {
+  if (refreshing || !state.place) return;
+  refreshing = true;
+  const btn = $("refreshBtn");
+  btn?.classList.add("spinning");
+  favCache.clear();                       // re-pull favorite-chip temps too
+  try {
+    await loadWeather(state.place, true);
+    scheduleRefresh();                    // next auto-refresh is a full interval away
+  } finally {
+    refreshing = false;
+    btn?.classList.remove("spinning");
+  }
 }
 
 boot();
