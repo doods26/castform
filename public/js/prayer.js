@@ -160,3 +160,56 @@ const COMPASS16 = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
 export function compass16(bearing) {
   return COMPASS16[Math.round(fixAngle(bearing) / 22.5) % 16];
 }
+
+// --- Current / next prayer ----------------------------------------------
+// Pick the current and next of the five daily prayers from their local-clock
+// hours, the current epoch-ms, the LOCATION's local date, and its UTC offset.
+//
+// Two things this gets right:
+//  1. Wrap past midnight — at higher latitudes (and mid-latitudes in summer)
+//     Isha/Fajr land in the small hours, so each prayer's instant is
+//     materialised for yesterday/today/tomorrow and the timeline is sorted.
+//  2. The sunrise gap — Fajr's window ENDS at sunrise. Between sunrise and
+//     Dhuhr no obligatory prayer is active, so we must NOT report "Fajr" then.
+//     `gap: true` flags that window (Now = none, Next = Dhuhr).
+//
+// times: { fajr, dhuhr, asr, maghrib, isha, sunrise } in decimal hours (or null)
+// returns { current, currentAt, next, nextAt, gap, gapFrom }
+const DAILY_ORDER = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
+function instantAt(date, dayOffset, hours, tzOffset) {
+  return Date.UTC(date.y, date.mo - 1, date.da + dayOffset) + (hours - tzOffset) * 3600000;
+}
+export function currentAndNext(times, nowMs, date, tzOffset) {
+  const events = [];
+  for (const dd of [-1, 0, 1]) {
+    for (const key of DAILY_ORDER) {
+      if (times[key] == null) continue;
+      events.push({ key, inst: instantAt(date, dd, times[key], tzOffset) });
+    }
+  }
+  events.sort((a, b) => a.inst - b.inst);
+
+  const next = events.find((e) => e.inst > nowMs) || null;
+  let current = null;
+  for (const e of events) { if (e.inst <= nowMs) current = e; else break; }
+
+  // Fajr ends at sunrise → if we're past the sunrise that ends the current
+  // Fajr (and Dhuhr hasn't begun), there's no active prayer: the morning gap.
+  let gap = false, gapFrom = null;
+  if (current && current.key === "fajr" && times.sunrise != null) {
+    let sr = null;
+    for (const dd of [-1, 0, 1]) {
+      const s = instantAt(date, dd, times.sunrise, tzOffset);
+      if (s >= current.inst && (sr == null || s < sr)) sr = s;   // sunrise ending THIS Fajr
+    }
+    if (sr != null && nowMs >= sr) { gap = true; gapFrom = sr; }
+  }
+  return {
+    current: gap || !current ? null : current.key,
+    currentAt: gap || !current ? null : current.inst,
+    next: next ? next.key : null,
+    nextAt: next ? next.inst : null,
+    gap,
+    gapFrom,
+  };
+}

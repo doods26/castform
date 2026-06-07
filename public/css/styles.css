@@ -40,8 +40,9 @@ body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   color: var(--text);
   background: linear-gradient(160deg, var(--bg-a), var(--bg-b));
-  min-height: 100vh;
-  min-height: 100dvh;            /* dvh tracks iOS Safari's collapsing toolbar */
+  min-height: 100vh;            /* NB: avoid dynamic-viewport-height units here —
+                                   they can resolve to 0 in an iOS standalone PWA
+                                   and collapse the element to nothing */
   overflow-x: hidden;
   transition: background 1.2s ease;
   -webkit-font-smoothing: antialiased;
@@ -701,6 +702,8 @@ body.editing-layout .card-resize:hover { opacity: 1; }
 .pray-summary { display: flex; align-items: stretch; gap: 12px; cursor: pointer; user-select: none; }
 .pray-cell { flex: 1; min-width: 0; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,0.04); border: 1px solid var(--stroke); }
 .pray-cell.next { background: linear-gradient(100deg, rgba(111,183,255,0.20), rgba(111,183,255,0.05)); border-color: rgba(111,183,255,0.40); }
+.pray-cell.now.gap .nm { color: var(--muted); font-size: 1rem; }
+.pray-cell.now.gap .tm { color: var(--faint); }
 .pray-cell .k { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); font-weight: 700; display: flex; align-items: center; gap: 6px; }
 .pray-cell .nm { font-size: 1.12rem; font-weight: 800; margin-top: 5px; display: flex; align-items: baseline; gap: 7px; }
 .pray-cell .nm .ar { font-size: 0.8rem; color: var(--faint); font-weight: 600; }
@@ -757,7 +760,7 @@ body.editing-layout .card-resize:hover { opacity: 1; }
   padding: calc(20px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom));
   animation: fadeIn .2s ease both; }
 .settings-overlay.hidden { display: none; }
-.settings-panel { width: 100%; max-width: 460px; max-height: 88dvh; overflow-y: auto;
+.settings-panel { width: 100%; max-width: 460px; max-height: 88vh; overflow-y: auto;
   /* Contain the scroll so it doesn't chain to the page behind (iOS PWA bug). */
   overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
   background: linear-gradient(180deg, #1a2740, #121b30); border: 1px solid var(--stroke);
@@ -850,7 +853,7 @@ body.editing-layout .card-resize:hover { opacity: 1; }
   /* Settings panel: let rows wrap so segmented controls don't overflow */
   .settings-overlay { align-items: flex-end;
     padding: calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom)); }
-  .settings-panel { max-height: 88dvh; border-radius: 18px; }
+  .settings-panel { max-height: 88vh; border-radius: 18px; }
   .set-row { flex-wrap: wrap; gap: 8px; }
   .set-row > label { flex: 1 1 100%; }
   .set-seg { justify-content: flex-start; }

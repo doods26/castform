@@ -2,7 +2,7 @@ import { describe, icon, compass } from "./wmo.js";
 import { initRadar } from "./radar.js";
 import { applyEffects, wireFullscreen } from "./effects.js";
 import { gauge, compassGauge } from "./gauge.js";
-import { prayerTimes, qiblaBearing, qiblaDistanceKm, compass16, methodForCountry } from "./prayer.js";
+import { prayerTimes, qiblaBearing, qiblaDistanceKm, compass16, methodForCountry, currentAndNext } from "./prayer.js";
 
 // --- State ----------------------------------------------------------------
 const state = {
@@ -1283,23 +1283,21 @@ function renderPrayer(f) {
   const t = prayerTimes({ year: y, month: mo, day: da, lat: place.lat, lon: place.lon,
     tzOffset, method: methodKey, asr: "standard" });
 
-  // The five daily prayers (sunrise excluded) → current & next.
-  const order = ["fajr", "dhuhr", "asr", "maghrib", "isha"];
+  // Current & next prayer. Handles past-midnight wrap AND the sunrise gap:
+  // Fajr ends at sunrise, so between sunrise and Dhuhr there is no active
+  // prayer (cn.current is null / cn.gap is true) — we must not show "Fajr" then.
   const now = Date.now();
+  const cn = currentAndNext(t, now, { y, mo, da }, tzOffset);
+  const curKey = cn.current, nextKey = cn.next, nextAt = cn.nextAt;
+  if (!nextKey) { card.innerHTML = ""; return; }  // polar day/night: no usable times
+  // Per-row "passed" styling still uses today's instants.
   const inst = {};
-  order.forEach((k) => { inst[k] = t[k] == null ? null : prayerInstant(y, mo, da, t[k], tzOffset); });
-  let nextKey = order.find((k) => inst[k] != null && inst[k] > now);
-  let curKey, nextAt;
-  if (nextKey) {
-    nextAt = inst[nextKey];
-    const idx = order.indexOf(nextKey);
-    curKey = idx > 0 ? order[idx - 1] : "isha"; // before Fajr → still last night's Isha
-  } else {
-    curKey = "isha"; nextKey = "fajr";          // after Isha → tomorrow's Fajr (~+24h)
-    nextAt = (inst.fajr != null ? inst.fajr : now) + 24 * 3600000;
-  }
+  ["fajr", "dhuhr", "asr", "maghrib", "isha"].forEach((k) => {
+    inst[k] = t[k] == null ? null : prayerInstant(y, mo, da, t[k], tzOffset);
+  });
   const meta = (k) => PRAYER_META.find((p) => p.key === k);
-  const cur = meta(curKey), nxt = meta(nextKey);
+  const cur = curKey ? meta(curKey) : null;   // null during the sunrise→Dhuhr gap
+  const nxt = meta(nextKey);
   const countdown = fmtPrayerCountdown(nextAt - now);
   const qb = qiblaBearing(place.lat, place.lon);
   const qd = qiblaDistanceKm(place.lat, place.lon);
@@ -1333,7 +1331,9 @@ function renderPrayer(f) {
       <span class="pray-method">${t.methodLabel} · auto<br>Standard Asr</span>
     </div>
     <div class="pray-summary" id="praySummary">
-      <div class="pray-cell now"><div class="k">🟢 Now</div><div class="nm">${cur.name} <span class="ar">${cur.ar}</span></div><div class="tm">since ${prayerClock(t[curKey])}</div></div>
+      ${cur
+        ? `<div class="pray-cell now"><div class="k">🟢 Now</div><div class="nm">${cur.name} <span class="ar">${cur.ar}</span></div><div class="tm">since ${prayerClock(t[curKey])}</div></div>`
+        : `<div class="pray-cell now gap"><div class="k">☀️ Now</div><div class="nm">No prayer</div><div class="tm">Fajr ended at sunrise ${prayerClock(t.sunrise)}</div></div>`}
       <div class="pray-cell next"><div class="k">Up next</div><div class="nm">${nxt.name} <span class="ar">${nxt.ar}</span></div><div class="tm">${prayerClock(t[nextKey])} · in ${countdown}</div></div>
       <div class="pray-chev">⌄</div>
     </div>

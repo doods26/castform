@@ -147,9 +147,12 @@ class MobilePwaTests(unittest.TestCase):
         self.assertIn("env(safe-area-inset-top)", css)
         self.assertIn("env(safe-area-inset-bottom)", css)
 
-    def test_css_uses_dynamic_viewport_height(self):
-        # 100dvh tracks iOS Safari's collapsing toolbar; 100vh overshoots it.
-        self.assertIn("100dvh", self._css())
+    def test_avoids_dvh_units(self):
+        # REGRESSION GUARD: `dvh` can resolve to ~0 in an iOS standalone PWA,
+        # collapsing the element to zero height (it broke the settings sheet —
+        # the backdrop showed but the panel was invisible). Stick to vh.
+        self.assertNotIn("dvh", self._css(),
+                         "avoid dvh — it collapses to 0 in the iOS standalone PWA")
 
     def test_mobile_inputs_avoid_ios_focus_zoom(self):
         # iOS zooms the whole page when focusing an input rendered under 16px.
@@ -200,11 +203,13 @@ class SettingsSheetTests(unittest.TestCase):
         css = (PUB / "css" / "styles.css").read_text(encoding="utf-8")
         self.assertRegex(css, r"\.settings-panel\s*\{[^}]*overscroll-behavior:\s*contain")
 
-    def test_panel_uses_dynamic_viewport(self):
-        # dvh (not vh) so the sheet's lower rows clear the iOS home indicator.
+    def test_panel_max_height_uses_vh_not_dvh(self):
+        # REGRESSION: the panel must cap its height with vh, NOT dvh — dvh
+        # collapses to ~0 in the iOS standalone PWA, hiding the whole panel
+        # (only the dimmed backdrop showed). vh keeps it visible everywhere.
         css = (PUB / "css" / "styles.css").read_text(encoding="utf-8")
-        self.assertNotRegex(css, r"\.settings-panel[^{]*\{[^}]*max-height:\s*\d+vh")
-        self.assertIn("88dvh", css)
+        self.assertRegex(css, r"\.settings-panel\s*\{[^}]*max-height:\s*\d+vh\b")
+        self.assertNotRegex(css, r"\.settings-panel\s*\{[^}]*max-height:\s*\d+dvh")
 
     def test_js_toggles_scroll_lock_class(self):
         js = (PUB / "js" / "app.js").read_text(encoding="utf-8")
@@ -224,9 +229,16 @@ class PrayerCardTests(unittest.TestCase):
     def test_prayer_module_exports(self):
         js = (PUB / "js" / "prayer.js").read_text(encoding="utf-8")
         for fn in ("prayerTimes", "qiblaBearing", "qiblaDistanceKm",
-                   "compass16", "methodForCountry", "METHODS"):
+                   "compass16", "methodForCountry", "currentAndNext", "METHODS"):
             self.assertRegex(js, rf"export\s+(?:function\s+|const\s+){fn}\b",
                              f"prayer.js must export {fn}")
+
+    def test_app_handles_sunrise_gap(self):
+        # The card must use currentAndNext and render a "no prayer" state during
+        # the sunrise→Dhuhr gap rather than claiming Fajr is current.
+        js = (PUB / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("currentAndNext", js)
+        self.assertIn("No prayer", js)
 
     def test_index_has_prayer_and_install_hooks(self):
         html = (PUB / "index.html").read_text(encoding="utf-8")
@@ -348,6 +360,60 @@ class PrayerMathTests(unittest.TestCase):
         self.assertIsNotNone(r["sunrise"])
         self.assertIsNotNone(r["fajr"])
         self.assertIsNotNone(r["isha"])
+
+
+@unittest.skipUnless(NODE, "node not available — skipping prayer-journey tests")
+class PrayerJourneyTests(unittest.TestCase):
+    """Walk current/next through a day under Node: the sunrise gap (no prayer
+    between sunrise and Dhuhr) and past-midnight Isha/Fajr wrap."""
+
+    def _journey(self, times_js, tz, date_js, points_js):
+        uri = (PUB / "js" / "prayer.js").as_uri()
+        body = (
+            f"const T={times_js}, tz={tz}, D={date_js};"
+            "const at=(h,dd)=>Date.UTC(D.y,D.mo-1,D.da+dd)+(h-tz)*3600000;"
+            f"const out={points_js}.map(p=>{{const r=m.currentAndNext(T,at(p.h,p.dd||0),D,tz);"
+            "return {h:p.h,current:r.current,gap:r.gap,next:r.next};});"
+            "console.log(JSON.stringify(out));"
+        )
+        script = (f"import('{uri}').then(m => {{ {body} }})"
+                  ".catch(e => { console.error(e); process.exit(2); });")
+        p = subprocess.run([NODE, "--input-type=module", "-e", script],
+                           capture_output=True, text=True, timeout=25)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        return {x["h"]: x for x in json.loads(p.stdout.strip())}
+
+    def test_dubai_day_progression(self):
+        T = "{fajr:3.85,sunrise:5.47,dhuhr:12.3,asr:15.68,maghrib:19.1,isha:20.6}"
+        pts = "[{h:4.4},{h:6},{h:10},{h:13},{h:17},{h:19.3},{h:22},{h:1.5}]"
+        b = self._journey(T, 4, "{y:2026,mo:6,da:5}", pts)
+        # Fajr window (before sunrise): Fajr is current.
+        self.assertEqual(b[4.4]["current"], "fajr"); self.assertFalse(b[4.4]["gap"])
+        # THE FIX — after sunrise, before Dhuhr → no active prayer, next is Dhuhr.
+        self.assertIsNone(b[6]["current"]); self.assertTrue(b[6]["gap"]); self.assertEqual(b[6]["next"], "dhuhr")
+        self.assertIsNone(b[10]["current"]); self.assertTrue(b[10]["gap"])
+        self.assertEqual(b[13]["current"], "dhuhr")
+        self.assertEqual(b[17]["current"], "asr")
+        self.assertEqual(b[19.3]["current"], "maghrib")
+        self.assertEqual(b[22]["current"], "isha"); self.assertEqual(b[22]["next"], "fajr")
+        self.assertEqual(b[1.5]["current"], "isha")   # past midnight, before Fajr
+
+    def test_fajr_not_current_after_sunrise(self):
+        # The reported bug, isolated: at noon, Fajr must NOT be "now".
+        T = "{fajr:5,sunrise:6.5,dhuhr:13,asr:16.5,maghrib:20,isha:21.5}"
+        b = self._journey(T, 0, "{y:2026,mo:6,da:5}", "[{h:12}]")
+        self.assertIsNone(b[12]["current"])
+        self.assertTrue(b[12]["gap"])
+        self.assertEqual(b[12]["next"], "dhuhr")
+
+    def test_high_latitude_wrap(self):
+        # Isha 00:30, Fajr 01:30. Just after Maghrib (23:30) the current prayer
+        # must be Maghrib and next Isha — not the naive cur=Isha / next=Fajr.
+        T = "{fajr:1.5,sunrise:3.0,dhuhr:12,asr:16,maghrib:23.0,isha:0.5}"
+        b = self._journey(T, 2, "{y:2026,mo:6,da:21}", "[{h:23.5},{h:0.2},{h:2}]")
+        self.assertEqual(b[23.5]["current"], "maghrib"); self.assertEqual(b[23.5]["next"], "isha")
+        self.assertEqual(b[0.2]["current"], "maghrib"); self.assertEqual(b[0.2]["next"], "isha")
+        self.assertEqual(b[2]["current"], "fajr")     # after Fajr, before sunrise
 
 
 class RefreshButtonTests(unittest.TestCase):
