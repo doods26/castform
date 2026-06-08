@@ -80,6 +80,12 @@ class IndexAssetVersionTests(unittest.TestCase):
         self.assertIsNotNone(app, "app.js cache-bust marker missing")
         self.assertEqual(css.group(1), app.group(1),
                          "styles.css and app.js cache-bust versions drifted apart")
+        # The footer "build N" stamp must equal the cache-bust, so the number a
+        # user reads on screen identifies exactly which assets they're running.
+        build = re.search(r"const BUILD\s*=\s*(\d+)", (PUB / "js" / "app.js").read_text(encoding="utf-8"))
+        self.assertIsNotNone(build, "BUILD constant missing from app.js")
+        self.assertEqual(build.group(1), css.group(1),
+                         "BUILD number is out of sync with the ?b= cache-bust")
 
 
 class ManifestTests(unittest.TestCase):

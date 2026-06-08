@@ -4,6 +4,11 @@ import { applyEffects, wireFullscreen } from "./effects.js";
 import { gauge, compassGauge } from "./gauge.js";
 import { prayerTimes, qiblaBearing, qiblaDistanceKm, compass16, methodForCountry, currentAndNext } from "./prayer.js";
 
+// Build number — shown in the footer so we can tell at a glance which code a
+// device is actually running (iOS caches PWAs/Safari aggressively). MUST stay
+// in lockstep with the ?b=N cache-bust in index.html (a test enforces this).
+const BUILD = 16;
+
 // --- State ----------------------------------------------------------------
 const state = {
   units: localStorage.getItem("units") || "imperial",
@@ -654,7 +659,7 @@ function render(place, data) {
     `Updated ${when} · ${place.lat.toFixed(2)}, ${place.lon.toFixed(2)} · ` +
     `Data: <a href="https://open-meteo.com" target="_blank">Open-Meteo</a>` +
     `${(data.alerts && data.alerts.length) || (place.country_code === "US") ? ` + <a href="https://weather.gov" target="_blank">NWS</a>` : ""}` +
-    ` · timezone ${f.timezone}`;
+    ` · timezone ${f.timezone} · build ${BUILD}`;
 }
 
 // --- Current --------------------------------------------------------------

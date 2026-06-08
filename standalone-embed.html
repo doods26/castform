@@ -1837,6 +1837,10 @@ Object.assign(__NS__, { METHODS, compass16, currentAndNext, methodForCountry, pr
 })();
 (function(){
 const { describe, icon, compass, initRadar, applyEffects, wireFullscreen, gauge, compassGauge, prayerTimes, qiblaBearing, qiblaDistanceKm, compass16, methodForCountry, currentAndNext } = __NS__;
+// Build number — shown in the footer so we can tell at a glance which code a
+// device is actually running (iOS caches PWAs/Safari aggressively). MUST stay
+// in lockstep with the ?b=N cache-bust in index.html (a test enforces this).
+const BUILD = 16;
 // --- State ----------------------------------------------------------------
 const state = {
   units: localStorage.getItem(&quot;units&quot;) || &quot;imperial&quot;,
@@ -2457,7 +2461,7 @@ function render(place, data) {
     `Updated ${when} · ${place.lat.toFixed(2)}, ${place.lon.toFixed(2)} · ` +
     `Data: <a href=&quot;https://open-meteo.com&quot; target=&quot;_blank&quot;>Open-Meteo</a>` +
     `${(data.alerts &amp;&amp; data.alerts.length) || (place.country_code === &quot;US&quot;) ? ` + <a href=&quot;https://weather.gov&quot; target=&quot;_blank&quot;>NWS</a>` : &quot;&quot;}` +
-    ` · timezone ${f.timezone}`;
+    ` · timezone ${f.timezone} · build ${BUILD}`;
 }
 // --- Current --------------------------------------------------------------
 function renderCurrent(place, f, meta) {
