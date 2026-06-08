@@ -30,6 +30,26 @@ class LayoutJourneys(JourneyTest):
         saved = page.evaluate("JSON.parse(localStorage.getItem('cardOrder')||'[]')")
         self.assertEqual(saved[: len(after)], after)
 
+    def test_hiding_every_visible_card_actually_hides_it(self):
+        # The real report: hide several cards, click Done, and ONE stays visible.
+        # Cause was CSS specificity — e.g. `#content > .cond-card{display:flex}`
+        # outranks `.lay-hidden{display:none}`. Hide every hideable card and prove
+        # each one truly disappears.
+        page = self.boot()
+        self._edit(page)
+        keys = page.eval_on_selector_all(
+            '#content > section[data-card] [data-hide]',
+            "els => els.map(e => e.closest('section').dataset.card)")
+        self.assertGreater(len(keys), 3, "expected several hideable cards")
+        for k in keys:
+            page.click(f'section[data-card="{k}"] [data-hide]')
+        page.click("#layoutDone")
+        page.wait_for_selector("body:not(.editing-layout)")
+        still_visible = [k for k in keys
+                         if page.locator(f'section[data-card="{k}"]').is_visible()]
+        self.assertEqual(still_visible, [],
+                         f"these cards refused to hide: {still_visible}")
+
     def _resize_handle_drag(self, page, key, dx, dy):
         handle = page.locator(f'section[data-card="{key}"] .card-resize')
         handle.scroll_into_view_if_needed()      # cards are tall; handle is below the fold

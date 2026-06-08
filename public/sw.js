@@ -6,7 +6,7 @@
 //     falling back to cache — so an offline launch shows the last forecast.
 //
 // Bump VERSION to invalidate old caches on deploy.
-const VERSION = "castform-v4";
+const VERSION = "castform-v5";
 
 // Files to pre-cache. Some only exist on the dev server (split CSS/JS), others
 // only on the bundled GitHub Pages build — failures are ignored individually.

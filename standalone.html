@@ -597,7 +597,11 @@ body.settings-open { overflow: hidden; }
 .life-bar i { display: block; height: 100%; border-radius: 3px; }
 .life-reason { font-size: 0.74rem; color: var(--muted); }
 /* Customizable layout (hide + reorder cards) ------------------------------ */
-.lay-hidden { display: none; }
+/* !important so hiding a card always wins — some cards set their own display via
+   higher-specificity rules (e.g. `#content > .cond-card{display:flex}`) which a
+   plain `.lay-hidden` class would lose to, leaving that card stubbornly visible.
+   Mirrors the `.hidden` feature-gate, which is `display:none !important` too. */
+.lay-hidden { display: none !important; }
 .card-edit { display: none; }
 body.editing-layout .card-edit {
   display: flex; align-items: center; gap: 8px; margin: -2px 0 14px;
@@ -605,7 +609,7 @@ body.editing-layout .card-edit {
   background: rgba(111,183,255,0.14); border: 1px dashed rgba(111,183,255,0.55);
 }
 body.editing-layout section[data-card] { outline: 1px dashed rgba(111,183,255,0.30); outline-offset: 3px; }
-body.editing-layout .lay-hidden { display: block; }      /* reveal hidden cards so they can be restored */
+body.editing-layout .lay-hidden { display: block !important; } /* reveal hidden cards (over the !important hide) so they can be restored */
 body.editing-layout section[data-card].lay-dim { opacity: 0.5; }
 .ce-grip { cursor: grab; color: var(--muted); font-size: 1.15rem; line-height: 1; touch-action: none; }
 .ce-grip:active { cursor: grabbing; }
@@ -1840,7 +1844,7 @@ const { describe, icon, compass, initRadar, applyEffects, wireFullscreen, gauge,
 // Build number — shown in the footer so we can tell at a glance which code a
 // device is actually running (iOS caches PWAs/Safari aggressively). MUST stay
 // in lockstep with the ?b=N cache-bust in index.html (a test enforces this).
-const BUILD = 16;
+const BUILD = 17;
 // --- State ----------------------------------------------------------------
 const state = {
   units: localStorage.getItem("units") || "imperial",
