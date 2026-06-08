@@ -61,6 +61,19 @@ This is a hard rule, not a suggestion:
   `/api/*` endpoints into `tests/fixtures/` (keep the 2026-06-08 capture date so
   the frozen clock stays aligned).
 
+### When the suites run (cadence)
+
+- **Every push & PR** → fast logic/build tests (`tests.yml` `logic` job; browser
+  journeys auto-skip without Playwright). ~1s.
+- **Pull requests** → browser journeys (`tests.yml` `journeys` job). Gates merge.
+- **Deploy to main** → browser journeys again (`pages.yml`). Gates the Pages
+  publish — this is the backstop that blocks a broken layout from shipping.
+- **Local pre-push** → the FULL suite via `.githooks/pre-push`. Activate once per
+  clone with `git config core.hooksPath .githooks` (already set in this clone).
+  Bypass in a pinch with `git push --no-verify`. Install the browser deps so the
+  journeys actually run locally: `pip install -r tests/requirements-dev.txt &&
+  python -m playwright install chromium`.
+
 ## Workflow for changes
 
 - Work on a branch, not `main`.

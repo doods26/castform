@@ -1,0 +1,26 @@
+#!/bin/sh
+# Pre-push gate: run the FULL test suite (logic + browser journeys) before any
+# push. Activated per-clone with:  git config core.hooksPath .githooks
+#
+# The browser journeys need Playwright + Chromium:
+#   pip install -r tests/requirements-dev.txt && python -m playwright install chromium
+# If Playwright isn't installed they skip automatically (logic tests still run).
+#
+# To bypass in a pinch:  git push --no-verify
+
+echo "pre-push: running test suite (logic + browser journeys)…"
+
+# Prefer python3, fall back to python (Windows / Git-Bash).
+PY=python
+command -v python3 >/dev/null 2>&1 && PY=python3
+
+"$PY" -m unittest discover -s tests
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "pre-push: tests FAILED — push aborted."
+  echo "          fix them, or override with: git push --no-verify"
+  exit 1
+fi
+
+echo "pre-push: all tests passed."
+exit 0
