@@ -1,8 +1,13 @@
 name: Tests
 
 # Regression suite. Runs on every push and every pull request so a broken
-# change is caught before it can merge or deploy. Zero dependencies — the
-# tests use only the Python standard library and never touch the network.
+# change is caught before it can merge or deploy.
+#
+# The SHIPPED APP stays zero-dependency (stdlib server + no-build frontend). The
+# TESTS add one dev-only tool: Playwright + headless Chromium, which drives the
+# real app so computed-CSS/layout bugs (e.g. the settings sheet collapsing to 0
+# height) are actually caught. The browser journeys mock all /api/* with local
+# fixtures, so the suite still never touches the network.
 
 on:
   push:
@@ -21,6 +26,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Install Playwright + Chromium (browser journey tests)
+        run: |
+          python -m pip install --quiet playwright
+          python -m playwright install --with-deps chromium
 
       - name: Run regression tests
         run: python -m unittest discover -s tests -v

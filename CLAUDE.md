@@ -31,6 +31,35 @@ This is a hard rule, not a suggestion:
 6. **When you fix a bug, add the regression test that would have caught it** — and
    if a guard's premise flips (e.g. `dvh` went from "use it" to "never use it,
    collapses to 0 in the iOS PWA"), invert the test rather than deleting it.
+7. **Interactive / visual journeys go in the browser suite.** Anything that
+   depends on COMPUTED CSS, layout geometry, or click→render flow (a panel is
+   actually visible, a hidden card actually disappears, a drag resizes a tile)
+   must be a Playwright journey in `tests/test_journey_*.py` — logic tests and
+   even jsdom can't see computed layout, which is exactly how the settings-sheet
+   collapse shipped twice. Device-only flows (iOS A2HS, Android install, live
+   compass) live in `tests/MANUAL_CHECKLIST.md`.
+
+### Browser journey harness (Playwright)
+
+- `tests/journey.py` is the base `JourneyTest`: it boots the real `server.py` on
+  a free port, launches headless Chromium, **mocks every `/api/*` from
+  `tests/fixtures/*.json`** (no network), and **freezes the clock + timezone**
+  (`2026-06-08` noon Asia/Dubai) so "now"-relative rendering is reproducible.
+  Animations/transitions are disabled in-test for stable geometry.
+- The whole layer **skips cleanly when Playwright isn't installed**, so the base
+  `python -m unittest discover -s tests` stays green locally without it. To run
+  the journeys: `pip install -r tests/requirements-dev.txt && python -m
+  playwright install chromium`. CI installs them and runs the journeys (they
+  gate the Pages deploy).
+- Gotchas baked into the harness/tests: advance the frozen clock
+  (`page.clock.run_for(...)`) to flush JS count-up animations and to fire
+  `setTimeout` debounces (search); don't `wait_for_selector` on a `display:none`
+  element to become "visible" (assert the class via `wait_for_function`);
+  `scroll_into_view_if_needed()` before a manual mouse-drag (resize handles sit
+  below the fold).
+- Re-capture fixtures only if the API shape changes: run `server.py` and curl the
+  `/api/*` endpoints into `tests/fixtures/` (keep the 2026-06-08 capture date so
+  the frozen clock stays aligned).
 
 ## Workflow for changes
 

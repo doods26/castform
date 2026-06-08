@@ -1,0 +1,13 @@
+# Dev/CI-only test dependencies. The shipped app needs NONE of these — it runs
+# on the Python standard library alone. These power the browser-driven customer
+# journey tests (tests/test_journey_*.py via tests/journey.py).
+#
+#   pip install -r tests/requirements-dev.txt
+#   python -m playwright install chromium
+#
+# Then the journeys run as part of the normal suite:
+#   python -m unittest discover -s tests
+#
+# Without these installed, the journey tests skip cleanly and the rest of the
+# suite still runs.
+playwright
