@@ -233,6 +233,29 @@ class SettingsSheetTests(unittest.TestCase):
         self.assertRegex(body, r"overflow-y:\s*auto",
                          "overlay must scroll so a tall panel is reachable")
 
+    def test_backdrop_filter_is_off_the_scroll_container(self):
+        # REGRESSION (iPhone, build 18): backdrop-filter on a SCROLLING container
+        # makes its children fail to paint in iOS WebKit — the blur showed but the
+        # settings panel was invisible. The blur must live on a separate layer
+        # (::before); the scrolling .settings-overlay itself must NOT carry it.
+        css = (PUB / "css" / "styles.css").read_text(encoding="utf-8")
+        overlay = re.search(r"\.settings-overlay\s*\{([^}]*)\}", css)
+        self.assertIsNotNone(overlay)
+        self.assertNotRegex(
+            overlay.group(1), r"backdrop-filter",
+            "backdrop-filter must not be on the scrolling .settings-overlay (hides children on iOS)")
+        self.assertRegex(
+            css, r"\.settings-overlay::before\s*\{[^}]*backdrop-filter",
+            "the blur belongs on .settings-overlay::before, off the scroll container")
+
+    def test_settings_overlay_is_block_not_flex(self):
+        # Flex centring of an overflowing child clipped the panel's top off-screen
+        # on phones. Block flow keeps the top on-screen and just scrolls.
+        css = (PUB / "css" / "styles.css").read_text(encoding="utf-8")
+        overlay = re.search(r"\.settings-overlay\s*\{([^}]*)\}", css)
+        self.assertNotRegex(overlay.group(1), r"display:\s*flex",
+                            "settings overlay should be block flow, not flex (flex clips overflow on iOS)")
+
     def test_js_toggles_scroll_lock_class(self):
         js = (PUB / "js" / "app.js").read_text(encoding="utf-8")
         self.assertIn('classList.add("settings-open")', js)
