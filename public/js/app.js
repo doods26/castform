@@ -7,7 +7,7 @@ import { prayerTimes, qiblaBearing, qiblaDistanceKm, compass16, methodForCountry
 // Build number — shown in the footer so we can tell at a glance which code a
 // device is actually running (iOS caches PWAs/Safari aggressively). MUST stay
 // in lockstep with the ?b=N cache-bust in index.html (a test enforces this).
-const BUILD = 18;
+const BUILD = 19;
 
 // --- State ----------------------------------------------------------------
 const state = {
@@ -1936,13 +1936,34 @@ function setupSettings() {
   // Toggle a body class so the page behind is scroll-locked — without it iOS
   // scroll-chains the page and the settings sheet barely scrolls (its lower
   // rows become unreachable in the installed PWA).
-  const open = () => { renderSettings(); overlay.classList.remove("hidden"); document.body.classList.add("settings-open"); };
+  const open = () => {
+    renderSettings(); overlay.classList.remove("hidden"); document.body.classList.add("settings-open");
+    diagnoseSettings(overlay);
+  };
   const close = () => { overlay.classList.add("hidden"); document.body.classList.remove("settings-open"); };
   btn.onclick = open;
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay || e.target.closest("[data-close]")) close();
   });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !overlay.classList.contains("hidden")) close(); });
+}
+
+// On-device safety net: after the sheet opens, measure it. If the panel is
+// collapsed or its header is pushed off-screen (the iPhone bug), surface the real
+// geometry in a toast so it can be screenshotted — beats guessing blind from afar.
+// Healthy renders show nothing.
+function diagnoseSettings(overlay) {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const pn = overlay.querySelector(".settings-panel");
+    const head = pn && pn.querySelector(".settings-head");
+    if (!pn || !head) return;
+    const p = pn.getBoundingClientRect(), h = head.getBoundingClientRect();
+    const broken = p.height < 120 || h.top < 0 || h.top > innerHeight || p.width < 80;
+    if (broken) {
+      toast(`⚠ settings b${BUILD}: panel ${Math.round(p.width)}×${Math.round(p.height)} ` +
+            `head@${Math.round(h.top)} vh${innerHeight} — screenshot this`, 9000);
+    }
+  }));
 }
 
 function renderSettings() {

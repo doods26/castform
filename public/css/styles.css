@@ -759,28 +759,29 @@ body.editing-layout .card-resize:hover { opacity: 1; }
 .reduce-motion .pray-more, .reduce-motion .pray-chev,
 .reduce-motion .qdial #qiblaNeedle, .reduce-motion .qdial #qiblaRing { transition: none; }
 
-/* Settings overlay + panel */
-/* The overlay is the scroll container — position:fixed; inset:0 pins it to the
-   REAL visual viewport (unlike viewport-height units, which can resolve to ~0 in
-   an iOS standalone PWA and collapse anything sized by them). The panel takes its
-   natural height and is centred by its OWN `margin:auto`, NOT by justify-content.
-   Why it matters: when the panel is taller than the screen (a phone with all the
-   rows), auto margins collapse to 0 and the panel falls back to flex-start — its
-   TOP stays on-screen and the overlay scrolls down to the rest. With
-   justify-content:center instead, an overflowing panel gets centred and its top
-   is pushed ABOVE the viewport where it can't be scrolled to (WebKit clips it) —
-   that's what hid the sheet on iPhone even after the height was fixed. */
-.settings-overlay { position: fixed; inset: 0; z-index: 1100; display: flex; flex-direction: column;
-  align-items: center; overflow-y: auto; overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch; background: rgba(6,10,20,0.6); backdrop-filter: blur(6px);
+/* Settings overlay + panel.
+   This layout is deliberately the most boring, iOS-PWA-safe modal possible,
+   because the fancy versions kept breaking on real iPhones:
+     - BLOCK scroll container, NOT flex. Flexbox centering of an overflowing child
+       pushed the panel's top off-screen where iOS WebKit clips it unreachably.
+     - backdrop-filter lives on a SEPARATE fixed layer (::before), NOT on the
+       scrolling container. On iOS, backdrop-filter on a scroll container makes its
+       CHILDREN fail to paint — the blur showed but the panel was invisible.
+     - the panel is normal in-flow content with `margin: ... auto`, so its top is
+       always on-screen and the overlay just scrolls when it's tall. No viewport
+       units (they resolve to ~0 in a standalone PWA). */
+.settings-overlay { position: fixed; inset: 0; z-index: 1100; display: block;
+  overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  background: rgba(6,10,20,0.72);
   /* Keep the panel clear of the notch (top) & home indicator (bottom) on iOS. */
   padding: calc(20px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom));
   animation: fadeIn .2s ease both; }
+/* Blur layer kept off the scroll container so it can't suppress the panel paint. */
+.settings-overlay::before { content: ""; position: fixed; inset: 0; z-index: -1;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .settings-overlay.hidden { display: none; }
-/* No max-height: natural content height, never collapses. margin:auto centers it
-   in the flex column and stays scroll-safe (auto margins yield to scroll when the
-   panel is taller than the viewport — the top never gets clipped). */
-.settings-panel { width: 100%; max-width: 460px; margin: auto;
+/* In-flow, horizontally centred, top-aligned. Never collapses, never clips. */
+.settings-panel { width: 100%; max-width: 460px; margin: 0 auto; position: relative;
   background: linear-gradient(180deg, #1a2740, #121b30); border: 1px solid var(--stroke);
   border-radius: 20px; box-shadow: var(--shadow); padding: 18px 20px 20px; }
 .settings-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
@@ -868,14 +869,13 @@ body.editing-layout .card-resize:hover { opacity: 1; }
   /* Sun arc must not overflow the narrow card */
   .sun-arc { width: 100%; max-width: 240px; }
 
-  /* Bottom-sheet on phones: stretch full width, anchor to the bottom. The
-     overlay is a flex column, so margin-top:auto pushes the panel down yet
-     stays scroll-safe — when it's taller than the screen the auto margin
-     collapses and the overlay scrolls from the top. (No max-height: never
-     collapses.) Let rows wrap so segmented controls don't overflow. */
-  .settings-overlay { align-items: stretch;
+  /* Phones: tighter padding, near-full-width card at the top of the scroll
+     container. Block flow (see base rule) keeps the top on-screen and lets the
+     overlay scroll — no flex/viewport-unit traps. Rows wrap so the segmented
+     controls don't overflow. */
+  .settings-overlay {
     padding: calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom)); }
-  .settings-panel { margin: auto 0 0; border-radius: 18px; }
+  .settings-panel { margin: 0 auto; border-radius: 18px; }
   .set-row { flex-wrap: wrap; gap: 8px; }
   .set-row > label { flex: 1 1 100%; }
   .set-seg { justify-content: flex-start; }
