@@ -597,7 +597,11 @@ body.settings-open { overflow: hidden; }
 .life-bar i { display: block; height: 100%; border-radius: 3px; }
 .life-reason { font-size: 0.74rem; color: var(--muted); }
 /* Customizable layout (hide + reorder cards) ------------------------------ */
-.lay-hidden { display: none; }
+/* !important so hiding a card always wins — some cards set their own display via
+   higher-specificity rules (e.g. `#content > .cond-card{display:flex}`) which a
+   plain `.lay-hidden` class would lose to, leaving that card stubbornly visible.
+   Mirrors the `.hidden` feature-gate, which is `display:none !important` too. */
+.lay-hidden { display: none !important; }
 .card-edit { display: none; }
 body.editing-layout .card-edit {
   display: flex; align-items: center; gap: 8px; margin: -2px 0 14px;
@@ -605,7 +609,7 @@ body.editing-layout .card-edit {
   background: rgba(111,183,255,0.14); border: 1px dashed rgba(111,183,255,0.55);
 }
 body.editing-layout section[data-card] { outline: 1px dashed rgba(111,183,255,0.30); outline-offset: 3px; }
-body.editing-layout .lay-hidden { display: block; }      /* reveal hidden cards so they can be restored */
+body.editing-layout .lay-hidden { display: block !important; } /* reveal hidden cards (over the !important hide) so they can be restored */
 body.editing-layout section[data-card].lay-dim { opacity: 0.5; }
 .ce-grip { cursor: grab; color: var(--muted); font-size: 1.15rem; line-height: 1; touch-action: none; }
 .ce-grip:active { cursor: grabbing; }
@@ -708,11 +712,16 @@ body.editing-layout .card-resize:hover { opacity: 1; }
 /* Settings overlay + panel */
 /* The overlay is the scroll container — position:fixed; inset:0 pins it to the
    REAL visual viewport (unlike viewport-height units, which can resolve to ~0 in
-   an iOS standalone PWA and collapse anything sized by them). The panel below
-   takes its natural height; if it's taller than the screen, the overlay scrolls.
-   This is immune to every "height resolved to zero" bug that broke the sheet. */
+   an iOS standalone PWA and collapse anything sized by them). The panel takes its
+   natural height and is centred by its OWN `margin:auto`, NOT by justify-content.
+   Why it matters: when the panel is taller than the screen (a phone with all the
+   rows), auto margins collapse to 0 and the panel falls back to flex-start — its
+   TOP stays on-screen and the overlay scrolls down to the rest. With
+   justify-content:center instead, an overflowing panel gets centred and its top
+   is pushed ABOVE the viewport where it can't be scrolled to (WebKit clips it) —
+   that's what hid the sheet on iPhone even after the height was fixed. */
 .settings-overlay { position: fixed; inset: 0; z-index: 1100; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; overflow-y: auto; overscroll-behavior: contain;
+  align-items: center; overflow-y: auto; overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch; background: rgba(6,10,20,0.6); backdrop-filter: blur(6px);
   /* Keep the panel clear of the notch (top) & home indicator (bottom) on iOS. */
   padding: calc(20px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom));
@@ -1840,7 +1849,7 @@ const { describe, icon, compass, initRadar, applyEffects, wireFullscreen, gauge,
 // Build number — shown in the footer so we can tell at a glance which code a
 // device is actually running (iOS caches PWAs/Safari aggressively). MUST stay
 // in lockstep with the ?b=N cache-bust in index.html (a test enforces this).
-const BUILD = 16;
+const BUILD = 18;
 // --- State ----------------------------------------------------------------
 const state = {
   units: localStorage.getItem("units") || "imperial",

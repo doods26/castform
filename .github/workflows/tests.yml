@@ -1,8 +1,16 @@
 name: Tests
 
-# Regression suite. Runs on every push and every pull request so a broken
-# change is caught before it can merge or deploy. Zero dependencies — the
-# tests use only the Python standard library and never touch the network.
+# Regression suite, split by cost:
+#   - `logic`  runs on EVERY push and PR. Stdlib + Node only, ~1s. The browser
+#     journeys auto-skip here (Playwright isn't installed), so they don't slow
+#     down routine pushes.
+#   - `journeys` runs on PULL REQUESTS only. It installs Playwright + headless
+#     Chromium and drives the real app to catch computed-CSS/layout regressions
+#     (the settings-collapse / hide-card class of bug). The Pages deploy gate
+#     (pages.yml) runs the journeys again before publishing to main.
+#
+# The SHIPPED APP stays zero-dependency; Playwright is a dev/CI-only tool and the
+# journeys mock all /api/* from local fixtures, so the suite never hits the net.
 
 on:
   push:
@@ -11,7 +19,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
+  logic:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -22,5 +30,27 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Run regression tests
+      - name: Run logic + build tests (browser journeys auto-skip)
         run: python -m unittest discover -s tests -v
+
+  journeys:
+    # Only on PRs (and manual dispatch) — the expensive browser run gates merges;
+    # the deploy workflow gates main. Skipped on routine branch pushes.
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Playwright + browsers (Chromium, WebKit)
+        run: |
+          python -m pip install --quiet playwright
+          python -m playwright install --with-deps chromium webkit
+
+      - name: Run browser journey tests
+        run: python -m unittest discover -s tests -p "test_journey_*.py" -v

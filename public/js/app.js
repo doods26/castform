@@ -7,7 +7,7 @@ import { prayerTimes, qiblaBearing, qiblaDistanceKm, compass16, methodForCountry
 // Build number — shown in the footer so we can tell at a glance which code a
 // device is actually running (iOS caches PWAs/Safari aggressively). MUST stay
 // in lockstep with the ?b=N cache-bust in index.html (a test enforces this).
-const BUILD = 16;
+const BUILD = 18;
 
 // --- State ----------------------------------------------------------------
 const state = {

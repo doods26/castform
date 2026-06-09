@@ -1,0 +1,5 @@
+# Dev/CI-only dependency for the browser journey tests (tests/test_journey_*.py).
+# The SHIPPED app stays zero-dependency; this is never imported by server.py or
+# the frontend. After installing, fetch the browser engines:
+#   python -m playwright install chromium webkit
+playwright
