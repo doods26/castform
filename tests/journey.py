@@ -58,6 +58,8 @@ def _load(name):
 class JourneyTest(unittest.TestCase):
     """Base class: one server + one browser for the whole class; fresh page per test."""
 
+    ENGINE = "chromium"   # override to "webkit" (Safari/iOS engine) in a subclass
+
     @classmethod
     def setUpClass(cls):
         cls.port = _free_port()
@@ -69,7 +71,10 @@ class JourneyTest(unittest.TestCase):
         cls.base = f"http://127.0.0.1:{cls.port}"
         cls._wait_for_server()
         cls._pw = sync_playwright().start()
-        cls.browser = cls._pw.chromium.launch()
+        # ENGINE lets a subclass run the SAME journeys on WebKit (Apple's engine,
+        # what Safari/iOS use). Chromium ≠ WebKit — the iPhone settings bug only
+        # shows up when you assert on a real WebKit layout.
+        cls.browser = getattr(cls._pw, cls.ENGINE).launch()
         # Pre-load fixtures once.
         cls.fx = {
             "weather": _load("weather.json"),
@@ -135,8 +140,26 @@ class JourneyTest(unittest.TestCase):
                 "navigator.geolocation.getCurrentPosition = (ok) => ok({coords:{latitude:%f,longitude:%f}});" % (lat, lon)
             )
         page = ctx.new_page()
-        page.clock.install(time=FROZEN_UTC)
+        # Freeze time for reproducible "now"-relative rendering. Playwright's clock
+        # is reliable on Chromium; on WebKit it can fail to attach — and the
+        # WebKit journeys are layout-only (time-independent), so a miss is harmless.
+        try:
+            page.clock.install(time=FROZEN_UTC)
+            page._clock_ok = True
+        except Exception:
+            page._clock_ok = False
         return page
+
+    def settle(self, page, ms=1500):
+        """Flush animations/timers. Uses the fake clock when present, else a real
+        wait — so WebKit (where the fake clock may not attach) still settles."""
+        try:
+            if getattr(page, "_clock_ok", False):
+                page.clock.run_for(ms)
+                return
+        except Exception:
+            pass
+        page.wait_for_timeout(min(ms, 1000))
 
     def _route(self, ctx):
         fx = self.fx
@@ -176,12 +199,45 @@ class JourneyTest(unittest.TestCase):
         settle to their final values before we assert on them."""
         page = self.new_page(**kw)
         page.goto(self.base + "/", wait_until="domcontentloaded")
+        page.wait_for_selector("#settingsBtn", state="attached", timeout=15000)
         # #content visible (loading screen hidden) means a forecast rendered.
-        page.wait_for_selector("#content:not(.hidden)", timeout=8000)
-        page.clock.run_for(1500)
+        # WebKit can be slower to boot, so give it room.
+        page.wait_for_selector("#content:not(.hidden)", timeout=15000)
+        self.settle(page, 1500)
         return page
 
     # --- small assertion helpers -----------------------------------------
     def visible_box(self, page, selector):
         """Bounding box of a selector, or None if absent/zero-area."""
         return page.locator(selector).first.bounding_box()
+
+    def open_settings(self, page):
+        page.click("#settingsBtn")
+        page.wait_for_selector("#settingsOverlay:not(.hidden)", timeout=5000)
+        page.wait_for_timeout(300)
+
+    def assert_settings_usable(self, page):
+        """The settings sheet must be genuinely usable, not just present: tall
+        enough, and with its HEADER on-screen. The iPhone bug rendered a panel
+        that was tall but center-clipped — its top (header + first row) pushed
+        above the viewport and unreachable, so `height>0` alone wasn't enough."""
+        m = page.evaluate(
+            """() => {
+                const ov = document.getElementById('settingsOverlay');
+                const pn = ov.querySelector('.settings-panel');
+                const head = pn.querySelector('.settings-head');
+                const pb = pn.getBoundingClientRect();
+                const hb = head.getBoundingClientRect();
+                return { innerH: innerHeight, panelH: Math.round(pb.height),
+                         panelTop: Math.round(pb.top), headTop: Math.round(hb.top),
+                         headBottom: Math.round(hb.bottom) };
+            }"""
+        )
+        self.assertGreater(m["panelH"], 300,
+                           f"settings panel collapsed (height={m['panelH']}) [{self.ENGINE}]")
+        self.assertGreaterEqual(m["headTop"], -1,
+                                f"settings header clipped above the viewport "
+                                f"(headTop={m['headTop']}) — unreachable [{self.ENGINE}]")
+        self.assertLess(m["headBottom"], m["innerH"],
+                        f"settings header below the viewport (headTop={m['headTop']}) [{self.ENGINE}]")
+        return m

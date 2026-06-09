@@ -42,15 +42,18 @@ class CoreJourneys(JourneyTest):
         self.assertTrue(page.get_by_text("Temperature", exact=True).is_visible())
 
     def test_settings_panel_opens_and_is_visible_mobile(self):
+        # On a phone the panel is TALLER than the screen — the regression was that
+        # it got center-clipped with its header pushed off the top. Assert the
+        # header is actually on-screen and reachable, not just that height>0.
         page = self.boot(viewport={"width": 390, "height": 844})
-        panel = self._open_settings(page)
-        box = panel.bounding_box()
-        self.assertIsNotNone(box, "settings panel has no box (mobile)")
-        self.assertGreater(box["height"], 300,
-                           f"settings panel collapsed on mobile (height={box['height']})")
-        vh = page.evaluate("innerHeight")
-        # The top of the sheet must sit within the viewport (not pushed off-screen).
-        self.assertLess(box["y"], vh, "settings panel rendered off-screen (mobile)")
+        self.open_settings(page)
+        self.assert_settings_usable(page)
+
+    def test_settings_panel_usable_on_small_phone(self):
+        # iPhone SE height — the tightest case where the panel overflows most.
+        page = self.boot(viewport={"width": 375, "height": 667})
+        self.open_settings(page)
+        self.assert_settings_usable(page)
 
     # --- the hide-card regression ----------------------------------------
     def _enter_layout_edit(self, page):
@@ -103,9 +106,9 @@ class CoreJourneys(JourneyTest):
         page.click("#settingsBtn")
         page.wait_for_selector("#settingsOverlay:not(.hidden)")
         page.click('.set-seg[data-seg="units"] button:has-text("°C")')
-        # Refetch + rerender; close settings and let it settle.
+        # Refetch + rerender; let it settle.
         page.wait_for_timeout(300)
-        page.clock.run_for(1500)
+        self.settle(page, 1500)
         after = page.locator("#currentCard").inner_text()
         self.assertNotEqual(before, after, "temperature did not change on unit switch")
 
@@ -113,13 +116,12 @@ class CoreJourneys(JourneyTest):
     def test_search_loads_city(self):
         page = self.boot()
         page.fill("#searchInput", "Dubai")
-        # The dropdown is debounced with setTimeout — the frozen clock won't fire
-        # it until we advance time.
-        page.clock.run_for(600)
+        # The dropdown is debounced with setTimeout — advance time to fire it.
+        self.settle(page, 600)
         page.wait_for_selector("#searchResults button", timeout=4000)
         page.locator("#searchResults button").first.click()
         page.wait_for_selector("#content:not(.hidden)")
-        page.clock.run_for(1500)
+        self.settle(page, 1500)
         self.assertRegex(page.locator("#currentCard").inner_text(), r"\d")
 
 

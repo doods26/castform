@@ -38,14 +38,24 @@ This is a hard rule, not a suggestion:
    even jsdom can't see computed layout, which is exactly how the settings-sheet
    collapse shipped twice. Device-only flows (iOS A2HS, Android install, live
    compass) live in `tests/MANUAL_CHECKLIST.md`.
+8. **iOS bugs need WebKit, not Chromium.** The app's biggest audience is iPhone,
+   and Chromium ≠ WebKit — the settings sheet passed every Chromium test while a
+   real iPhone clipped its header off-screen. Layout-sensitive journeys must also
+   run on WebKit (`ENGINE = "webkit"`, see `tests/test_journey_webkit.py`) at
+   phone sizes (390×844 and 375×667). And assert the panel is *usable*, not just
+   present: check the header's top is on-screen (≥0), not merely `height>0` — an
+   overflowing sheet can be tall yet center-clipped beyond reach.
 
 ### Browser journey harness (Playwright)
 
 - `tests/journey.py` is the base `JourneyTest`: it boots the real `server.py` on
-  a free port, launches headless Chromium, **mocks every `/api/*` from
+  a free port, launches a headless browser (`ENGINE`, default Chromium; set
+  `"webkit"` for the iOS-engine subclass), **mocks every `/api/*` from
   `tests/fixtures/*.json`** (no network), and **freezes the clock + timezone**
   (`2026-06-08` noon Asia/Dubai) so "now"-relative rendering is reproducible.
-  Animations/transitions are disabled in-test for stable geometry.
+  Animations/transitions are disabled in-test for stable geometry. Use
+  `self.settle(page)` (not `page.clock.run_for`) to flush — it falls back to a
+  real wait on WebKit, where Playwright's fake clock may not attach.
 - The whole layer **skips cleanly when Playwright isn't installed**, so the base
   `python -m unittest discover -s tests` stays green locally without it. To run
   the journeys: `pip install -r tests/requirements-dev.txt && python -m
